@@ -146,6 +146,7 @@ export async function* streamMessage(
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
+  console.log("body",body)
   const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
     method: 'POST',
     headers: {

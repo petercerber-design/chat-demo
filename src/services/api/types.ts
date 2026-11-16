@@ -178,8 +178,10 @@ export type CreateMessageRequest = {
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
-  safety_check: { level: 'high' }
+  safety_check: { level: 'low' }
   title?: { enabled: boolean }
+  max_token?: number,
+  output_config?:any
 }
 
 // ---------- 响应：流式事件 ----------
