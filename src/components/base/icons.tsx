@@ -82,6 +82,18 @@ export const IconDataOutline16 = () => (
   </svg>
 )
 
+/** 模型图标：两层堆叠的方块，表示可切换的模型 */
+export const IconModelOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M8 1.33301L14.6667 4.66634L8 7.99967L1.33334 4.66634L8 1.33301Z" fill="currentColor" />
+    <path
+      d="M3.33334 7.22699L1.33334 8.22699L8 11.5603L14.6667 8.22699L12.6667 7.22699L8 9.56032L3.33334 7.22699Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+
 export const IconUploadOutline14 = () => (
   <svg width={14} height={14} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

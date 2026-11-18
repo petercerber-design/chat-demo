@@ -146,6 +146,55 @@
   max-width: min(285px, 100%);
 }
 
+.numberInput {
+  box-sizing: border-box;
+  width: 132px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  background-color: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: end;
+  outline: none;
+  transition: border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:focus {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+}
+
+.promptCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.promptInput {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 160px;
+  margin-top: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background-color: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:focus {
+    border-color: var(--dsw-alias-brand-primary);
+  }
+}
+
 .theme {
   flex-shrink: 0;
   margin-top: 10px;
@@ -359,6 +408,15 @@
   .provinceSelect,
   .citySelect {
     flex: 1 1 auto;
+  }
+
+  .numberInput {
+    height: 44px;
+    border-radius: 22px;
+  }
+
+  .promptInput {
+    min-height: 120px;
   }
 
   .apiKey {

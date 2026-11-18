@@ -1,11 +1,12 @@
 import clsx from 'clsx'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   IconDarkOutline16,
   IconDataOutline16,
   IconDownloadOutline16,
   IconFollowsystemOutline16,
   IconLightOutline16,
+  IconModelOutline16,
   IconSettingsOutline16,
   IconUploadOutline14,
 } from '../base/icons.js'
@@ -15,6 +16,20 @@ import {
   exportHistory,
   importHistory,
 } from '../../services/chat/backup.js'
+import {
+  MODEL_CONFIG_LIMITS,
+  resetModelConfig,
+  setFileRetryBaseDelay,
+  setFileRetryLimit,
+  setMaxTokens,
+  setModel,
+  setSafetyCheckLevel,
+  setSessionCacheLimit,
+  setSystemPrompt,
+  useModelConfig,
+  type SafetyCheckLevel,
+} from '../../services/chat/config.js'
+import type { ChatModel } from '../../services/api/types.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -37,7 +52,8 @@ import { closeSettings, useSettingsDialog, type SettingsSection } from './settin
 import styles from './Settings.module.css'
 
 /**
- * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）与「数据管理」（API Key、导入、导出、删除）。
+ * 设置弹窗：分「通用设置」（主题、语言、朗读音色、位置）、「模型设置」（请求参数与缓存 / 重试策略）
+ * 与「数据管理」（API Key、导入、导出、删除）。
  * 桌面端为居中弹窗、左侧导航；移动端为底部弹层、导航横排在内容上方
  */
 export const SettingsDialog = () => {
@@ -50,6 +66,11 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
     value: 'general',
     label: 'settingDialogAsideGeneralOptionLabel',
     icon: <IconSettingsOutline16 />,
+  },
+  {
+    value: 'model',
+    label: 'settingDialogAsideModelOptionLabel',
+    icon: <IconModelOutline16 />,
   },
   { value: 'data', label: 'settingDialogAsideDataOptionLabel', icon: <IconDataOutline16 /> },
 ]
@@ -100,6 +121,17 @@ const SettingsContent = () => {
               <LocaleSetting />
               <TtsVoiceSetting />
               <LocationSetting />
+            </>
+          ) : section === 'model' ? (
+            <>
+              <ModelSetting />
+              <MaxTokensSetting />
+              <SystemPromptSetting />
+              <SessionCacheLimitSetting />
+              <SafetyCheckSetting />
+              <FileRetryLimitSetting />
+              <FileRetryBaseDelaySetting />
+              <ResetModelSetting />
             </>
           ) : (
             <>
@@ -309,6 +341,206 @@ const TtsVoiceSetting = () => {
           ]}
           onChange={setTtsVoice}
         />
+      }
+    />
+  )
+}
+
+/** 模型分组：请求参数与缓存 / 重试策略，均保存在本机 */
+const ModelSetting = () => {
+  const t = useTranslate()
+  const model = useModelConfig((state) => state.model)
+  return (
+    <SettingCell
+      label={t('settingsModelName')}
+      description={t('settingsModelNameDescription')}
+      status={null}
+      action={
+        <Select<ChatModel>
+          ariaLabel={t('settingsModelName')}
+          value={model}
+          options={[
+            { value: 'deepseek-flash', label: 'deepseek-flash' },
+            { value: 'deepseek-v4-pro', label: 'deepseek-v4-pro' },
+          ]}
+          onChange={setModel}
+        />
+      }
+    />
+  )
+}
+
+/** 数值项：输入过程中允许暂时为空，只有合法数字才写入设置 */
+const NumberSetting = ({
+  label,
+  description,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  label: string
+  description: string
+  value: number
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) => {
+  const [draft, setDraft] = useState(String(value))
+  // 恢复默认等外部修改同步回输入框
+  useEffect(() => setDraft(String(value)), [value])
+  return (
+    <SettingCell
+      label={label}
+      description={description}
+      status={null}
+      action={
+        <input
+          type="number"
+          className={styles.numberInput}
+          aria-label={label}
+          value={draft}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(event) => {
+            const next = event.target.value
+            setDraft(next)
+            const parsed = Number(next)
+            if (next.trim() !== '' && Number.isFinite(parsed)) {
+              onChange(Math.min(Math.max(Math.round(parsed), min), max))
+            }
+          }}
+          onBlur={() => setDraft(String(value))}
+        />
+      }
+    />
+  )
+}
+
+const MaxTokensSetting = () => {
+  const t = useTranslate()
+  const maxTokens = useModelConfig((state) => state.maxTokens)
+  return (
+    <NumberSetting
+      label={t('settingsModelMaxTokens')}
+      description={t('settingsModelMaxTokensDescription')}
+      value={maxTokens}
+      {...MODEL_CONFIG_LIMITS.maxTokens}
+      onChange={setMaxTokens}
+    />
+  )
+}
+
+/** 系统提示词：输入时只改本地草稿，失焦后写入设置，避免每个键都写一遍 localStorage */
+const SystemPromptSetting = () => {
+  const t = useTranslate()
+  const systemPrompt = useModelConfig((state) => state.systemPrompt)
+  const [draft, setDraft] = useState(systemPrompt)
+  useEffect(() => setDraft(systemPrompt), [systemPrompt])
+  return (
+    <div className={clsx(styles.cell, styles.promptCell)}>
+      <div className={styles.label}>{t('settingsModelSystemPrompt')}</div>
+      <div className={styles.description}>{t('settingsModelSystemPromptDescription')}</div>
+      <textarea
+        className={styles.promptInput}
+        aria-label={t('settingsModelSystemPrompt')}
+        value={draft}
+        spellCheck={false}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          if (draft !== systemPrompt) {
+            setSystemPrompt(draft)
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+const SessionCacheLimitSetting = () => {
+  const t = useTranslate()
+  const sessionCacheLimit = useModelConfig((state) => state.sessionCacheLimit)
+  return (
+    <NumberSetting
+      label={t('settingsModelSessionCacheLimit')}
+      description={t('settingsModelSessionCacheLimitDescription')}
+      value={sessionCacheLimit}
+      {...MODEL_CONFIG_LIMITS.sessionCacheLimit}
+      onChange={setSessionCacheLimit}
+    />
+  )
+}
+
+const SafetyCheckSetting = () => {
+  const t = useTranslate()
+  const safetyCheckLevel = useModelConfig((state) => state.safetyCheckLevel)
+  return (
+    <SettingCell
+      label={t('settingsModelSafetyCheck')}
+      description={t('settingsModelSafetyCheckDescription')}
+      status={null}
+      action={
+        <Select<SafetyCheckLevel>
+          ariaLabel={t('settingsModelSafetyCheck')}
+          value={safetyCheckLevel}
+          options={[
+            { value: 'low', label: t('settingsModelSafetyCheckLow') },
+            { value: 'high', label: t('settingsModelSafetyCheckHigh') },
+          ]}
+          onChange={setSafetyCheckLevel}
+        />
+      }
+    />
+  )
+}
+
+const FileRetryLimitSetting = () => {
+  const t = useTranslate()
+  const fileRetryLimit = useModelConfig((state) => state.fileRetryLimit)
+  return (
+    <NumberSetting
+      label={t('settingsModelFileRetryLimit')}
+      description={t('settingsModelFileRetryLimitDescription')}
+      value={fileRetryLimit}
+      {...MODEL_CONFIG_LIMITS.fileRetryLimit}
+      onChange={setFileRetryLimit}
+    />
+  )
+}
+
+const FileRetryBaseDelaySetting = () => {
+  const t = useTranslate()
+  const fileRetryBaseDelay = useModelConfig((state) => state.fileRetryBaseDelay)
+  return (
+    <NumberSetting
+      label={t('settingsModelFileRetryBaseDelay')}
+      description={t('settingsModelFileRetryBaseDelayDescription')}
+      value={fileRetryBaseDelay}
+      {...MODEL_CONFIG_LIMITS.fileRetryBaseDelay}
+      onChange={setFileRetryBaseDelay}
+    />
+  )
+}
+
+const ResetModelSetting = () => {
+  const t = useTranslate()
+  return (
+    <SettingCell
+      label={t('settingsModelReset')}
+      description={t('settingsModelResetDescription')}
+      status={null}
+      action={
+        <Button
+          variant="outlined"
+          size="m"
+          className={styles.cellButton}
+          onClick={resetModelConfig}
+        >
+          {t('settingsModelResetAction')}
+        </Button>
       }
     />
   )

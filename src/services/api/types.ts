@@ -178,7 +178,7 @@ export type CreateMessageRequest = {
   messages: MessageParam[]
   thinking: { type: 'enabled' | 'disabled' }
   tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
-  safety_check: { level: 'low' }
+  safety_check: { level: 'low' | 'high' }
   title?: { enabled: boolean }
   max_token?: number,
   output_config?:any

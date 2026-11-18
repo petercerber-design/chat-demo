@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import type { CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
+import { getModelConfig, useModelConfig } from './config.js'
 import * as db from './db.js'
 import {
   clearAllDrafts,
@@ -31,55 +32,6 @@ import {
   type SessionSummary,
   type UserMessage,
 } from './types.js'
-
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-v4-pro'
-
-const MAX_TOKENS = 65536
-
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = `You are a tenured university professor of mathematics specializing in algebra, with a research profile centered on quantum groups and related algebraic-combinatorial structures. Your role is to provide rigorous, precise, and pedagogically sound answers. You are not a generic assistant: you reason and write like an algebraist who cares about definitions, hypotheses, proofs, counterexamples, and correct notation.
-
-Scope:
-Your expertise is defined by the following MSC 2020 classifications:
-- 17B37: Quantum groups (quantized enveloping algebras) and related deformations;
-- 05E14: Combinatorial aspects of algebraic geometry;
-- 05E16: Combinatorial aspects of groups and algebras;
-- 81R12: Groups and algebras in quantum theory;
-- 81R50: Quantum groups and related algebraic methods applied to problems in quantum theory.
-
-You are expected to handle questions centered on quantum groups, their combinatorial models, related algebraic deformations, and algebraic structures arising in quantum-theoretic contexts. When a question requires background from adjacent areas such as Hopf algebras, Yang–Baxter equations, cluster algebras, or integrable systems, state the necessary prerequisites explicitly rather than assuming them. You should also be able to discuss standard objects in this area, including but not limited to quantized enveloping algebras, q-Onsager algebras, tridiagonal pairs, q-shuffle algebras, quantum symmetric pairs, and related combinatorial bases.
-
-Mathematical standards:
-1. State all definitions, hypotheses, and conclusions precisely. Do not silently assume commutativity, finite dimensionality, characteristic zero, algebraic closedness, Noetherianity, or the axiom of choice unless they are given or explicitly declared.
-2. When presenting a theorem, give its exact statement under explicit assumptions. Distinguish clearly between a theorem, proposition, lemma, corollary, conjecture, heuristic, and example.
-3. When asked for a proof, provide a rigorous proof. If you give only a proof sketch, label it clearly as a sketch and indicate which details are omitted. Do not present an incomplete argument as a complete proof.
-4. Use standard mathematical notation and LaTeX. Define any nonstandard notation before using it. Keep notation consistent throughout the answer.
-5. When giving examples or counterexamples, construct them explicitly and verify the key properties. If an example depends on a special field, characteristic, ring, or group, say so.
-6. For computations, show the main steps, state the method, and include sanity checks where useful. Do not merely assert a final answer unless the user explicitly requests only the answer.
-7. Avoid fabricated citations, theorem names, historical claims, or references. If you are not certain of a reference, say so explicitly rather than inventing one. Do not claim a result is “well known” as a substitute for a proof unless it is genuinely standard and appropriate for the audience.
-
-Answer style:
-- Be direct, professorial, and precise. Prefer clarity over rhetorical flourish.
-- Begin with a concise answer or roadmap. Then provide definitions/assumptions, the main result or proof, examples or counterexamples, and common pitfalls when relevant.
-- Match the user’s level: give more background for beginners and more compressed arguments for advanced users. If the level is unclear, state your assumed level.
-- If a question is ambiguous, either ask one focused clarification or state a reasonable interpretation and proceed under explicit assumptions.
-- If a claimed statement is false or ill-posed, say so clearly, explain why, and give the correct formulation when possible.
-- Do not overclaim. If a question is open, research-level, or beyond reliable knowledge, state the limits of the answer and distinguish established facts from plausible reasoning.
-
-Quality check before finalizing:
-Verify that all assumptions are stated, notation is consistent, edge cases are considered, necessary and sufficient conditions are not confused, and any proof or computation supports the stated conclusion. When appropriate, end with a short “Key points” or “Common pitfalls” summary.
-
-Respond in the user’s language unless they request otherwise. Use LaTeX for mathematics.`;
-
-/** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
-const SESSION_CACHE_LIMIT = 5
-/** 安全审核固定开启，所有请求都走扩展模式 */
-const SAFETY_CHECK = { level: 'low' } as const
-/** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
-const FILE_RETRY_LIMIT = 3
-/** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
-const FILE_RETRY_BASE_DELAY = 1000
 
 /** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
 const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
@@ -155,10 +107,12 @@ const sessionLoads = new Map<string, { promise: Promise<void> }>()
 
 const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence)
 
+/** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const trimSessionCache = () => {
   const state = get()
+  const limit = getModelConfig().sessionCacheLimit
   const ids = Object.keys(state.sessionCache)
-  if (ids.length <= SESSION_CACHE_LIMIT) {
+  if (ids.length <= limit) {
     return
   }
   const removable = ids
@@ -170,7 +124,7 @@ const trimSessionCache = () => {
         !deletingSessions.has(id)
     )
     .sort((a, b) => (sessionAccess.get(a) ?? 0) - (sessionAccess.get(b) ?? 0))
-  const evicted = new Set(removable.slice(0, ids.length - SESSION_CACHE_LIMIT))
+  const evicted = new Set(removable.slice(0, ids.length - limit))
   for (const id of evicted) {
     sessionAccess.delete(id)
   }
@@ -182,6 +136,13 @@ const trimSessionCache = () => {
     })
   }
 }
+
+// 缓存上限调整后按新上限立即淘汰，不必等下一次加载会话
+useModelConfig.subscribe((config, previous) => {
+  if (config.sessionCacheLimit !== previous.sessionCacheLimit) {
+    trimSessionCache()
+  }
+})
 
 const updateSession = (id: string, update: (session: Session) => Session) =>
   set((state) => {
@@ -296,7 +257,7 @@ const createReply = (): AssistantMessage => {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
+    model: getModelConfig().model,
     thinking,
     search,
     prefix: true,
@@ -745,7 +706,7 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const reply: AssistantMessage = {
     ...previous,
     // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
+    model: previous.model ?? getModelConfig().model,
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',
@@ -985,7 +946,7 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
         signal.removeEventListener('abort', onAbort)
         resolve()
       },
-      FILE_RETRY_BASE_DELAY * 2 ** attempt
+      getModelConfig().fileRetryBaseDelay * 2 ** attempt
     )
     signal.addEventListener('abort', onAbort, { once: true })
   })
@@ -1032,15 +993,16 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           initial.thinking ?? false,
           latestReminder
         )
+        const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
         const events = streamMessage(
           useSettings.getState().apiKey ?? '',
           {
-            model: initial.model ?? MODEL,
-            system: SYSTEM_PROMPT,
-            max_token:MAX_TOKENS,
+            model: initial.model ?? model,
+            system: systemPrompt,
+            max_token: maxTokens,
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
+            safety_check: { level: safetyCheckLevel },
             output_config:{effort: "max"},
             tools: serverTools(initial.search ?? false),
             ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
@@ -1087,7 +1049,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (
-          attempt < FILE_RETRY_LIMIT &&
+          attempt < getModelConfig().fileRetryLimit &&
           !receivedContent &&
           reuploadInvalidatedFiles(sessionId, request, error)
         ) {

@@ -93,11 +93,38 @@ export const en = {
   settingsTtsVoice: 'Read-aloud voice',
   settingsTtsVoiceStella: 'Stella (female)',
   settingsTtsVoiceTide: 'Tide (male)',
+  settingsModelName: 'Model',
+  settingsModelNameDescription:
+    'Model used for new requests. Saved chats keep the model they were generated with.',
+  settingsModelMaxTokens: 'Max output tokens',
+  settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
+  settingsModelSystemPrompt: 'System prompt',
+  settingsModelSystemPromptDescription:
+    'Assistant identity sent with every request. Leave empty to use the built-in default prompt.',
+  settingsModelSessionCacheLimit: 'Session cache limit',
+  settingsModelSessionCacheLimitDescription:
+    'Number of recent chat details kept in memory (1–50). The active chat and chats that are generating are never evicted.',
+  settingsModelSafetyCheck: 'Safety check',
+  settingsModelSafetyCheckDescription:
+    'low is the standard level; high sends requests in the extended mode.',
+  settingsModelSafetyCheckLow: 'low (standard)',
+  settingsModelSafetyCheckHigh: 'high (extended)',
+  settingsModelFileRetryLimit: 'Attachment retry limit',
+  settingsModelFileRetryLimitDescription:
+    'Maximum number of re-uploads and resends after the server rejects a file ID, excluding the first request (0–10).',
+  settingsModelFileRetryBaseDelay: 'Retry backoff base',
+  settingsModelFileRetryBaseDelayDescription:
+    'Milliseconds (100–60000). The n-th retry waits 2 to the power of n times this base.',
+  settingsModelReset: 'Restore defaults',
+  settingsModelResetDescription:
+    'Restore the parameters above to their built-in defaults. Saved chats are not affected.',
+  settingsModelResetAction: 'Restore',
   settingsLocation: 'Location',
   settingsLocationProvince: 'Select province/region',
   settingsLocationCity: 'Select city',
   settingsLocationRegion: 'Select country or region',
   settingDialogAsideGeneralOptionLabel: 'General',
+  settingDialogAsideModelOptionLabel: 'Model',
   settingDialogAsideDataOptionLabel: 'Data',
   avatarMenuSettingsDialogThemeItemLabel: 'Theme',
   avatarMenuSettingsDialogThemeSelectLightOption: 'Light',
