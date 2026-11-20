@@ -1,3 +1,10 @@
+import {
+  DEFAULT_PROVIDER,
+  getDefaultModel,
+  getModelInfo,
+  modelSupportsFiles,
+  type ChatModel,
+} from '../api/providers.js'
 import type {
   AssistantBlockParam,
   FileBlockParam,
@@ -17,19 +24,21 @@ import type {
 
 /**
  * 文件按 Files API 的 file_id（附件的 serverId）引用：图片用 image 块，其余用 document 块。
- * 发送前 streamReply 会先补齐 serverId；仍为 null 的是本地没有原件的附件，不进入请求。
+ * 发送前 streamReply 会先补齐 serverId；当前模型不支持 Files API 或附件仍为 null 时不进入请求。
  */
-const toFileBlocks = (files: FileAttachment[]): FileBlockParam[] =>
-  files.flatMap(({ serverId, isImage }) =>
-    serverId
-      ? [
-          {
-            type: isImage ? 'image' : 'document',
-            source: { type: 'file', file_id: serverId },
-          },
-        ]
-      : []
-  )
+const toFileBlocks = (files: FileAttachment[], enabled = true): FileBlockParam[] =>
+  enabled
+    ? files.flatMap(({ serverId, isImage }) =>
+        serverId
+          ? [
+              {
+                type: isImage ? 'image' : 'document',
+                source: { type: 'file', file_id: serverId },
+              },
+            ]
+          : []
+      )
+    : []
 
 const toReplyBlock = (block: OutputBlockStart, now: number): ReplyBlock | null => {
   switch (block.type) {
@@ -185,8 +194,7 @@ export const canContinueReply = (reply: AssistantMessage): boolean => {
     return false
   }
   return (
-    reply.status === 'stopped' ||
-    (reply.status === 'done' && reply.stopReason === 'max_tokens')
+    reply.status === 'stopped' || (reply.status === 'done' && reply.stopReason === 'max_tokens')
   )
 }
 
@@ -202,8 +210,8 @@ const isUsableReply = (message: Message): message is AssistantMessage =>
   getReplyText(message) !== ''
 
 /** 有文件时用内容块数组：先文件后文本，文件按 Files API 的 file_id 引用 */
-const toUserParam = ({ content, files }: UserMessage): MessageParam => {
-  const blocks = toFileBlocks(files)
+const toUserParam = ({ content, files }: UserMessage, filesSupported: boolean): MessageParam => {
+  const blocks = toFileBlocks(files, filesSupported)
   return blocks.length === 0
     ? { role: 'user', content }
     : {
@@ -219,11 +227,13 @@ const toUserParam = ({ content, files }: UserMessage): MessageParam => {
  *   省略历史思考后仍保留其前后正文的空行；
  * - 工具调用和结果只保留 kind 为 read_link 的块，其他历史工具块不回传；
  * - 阅读链接结果原样回传，保留 signature：服务端解密后将页面拼回该轮提问末尾；
+ * - readLinks 为 false（如 GLM）时不回传 DeepSeek 专有的阅读链接块。
  */
 const toAssistantParam = (
   { blocks }: AssistantMessage,
   prefix = false,
-  thinking = false
+  thinking = false,
+  readLinks = true
 ): Extract<MessageParam, { role: 'assistant' }> => {
   const content: AssistantBlockParam[] = []
   // 成功阅读的网页靠签名恢复正文；缺少有效签名时，调用与结果都不回传。
@@ -263,6 +273,7 @@ const toAssistantParam = (
       const { type, thinking, signature } = block
       content.push({ type, thinking, signature: signature ?? '' })
     } else if (
+      readLinks &&
       block.type === 'server_tool_use' &&
       block.kind === 'read_link' &&
       !unsignedReadLinks.has(block.id)
@@ -270,6 +281,7 @@ const toAssistantParam = (
       const { type, id, name, input, kind } = block
       content.push({ type, id, name, input, kind })
     } else if (
+      readLinks &&
       block.type === 'web_fetch_tool_result' &&
       block.kind === 'read_link' &&
       !unsignedReadLinks.has(block.tool_use_id)
@@ -299,6 +311,7 @@ export const getContextRounds = (history: Message[]): [UserMessage, AssistantMes
 /**
  * 把会话转成请求的 messages：只保留「提问 + 有回答的回复」成对的轮次，最后接上本轮提问。
  * 失败或没有回答的轮次不进上下文。续写时末尾再带上本轮 assistant。
+ * 附件与 latest_reminder 是否进入请求由模型能力决定，未指定模型时按默认模型处理。
  */
 export const toRequestMessages = (
   history: Message[],
@@ -306,29 +319,34 @@ export const toRequestMessages = (
   prefix?: AssistantMessage,
   thinking = prefix?.thinking ?? false,
   latestReminder?: string,
-  curModel?:string
+  curModel?: ChatModel
 ): MessageParam[] => {
+  const modelInfo = getModelInfo(curModel ?? getDefaultModel(DEFAULT_PROVIDER))
+  const filesSupported = modelSupportsFiles(curModel ?? getDefaultModel(DEFAULT_PROVIDER))
   const messages: MessageParam[] = []
   let previousReminder: string | undefined
   const appendReminder = (reminder: string | undefined) => {
     // 仅在当前分支首次出现或内容变化时插入快照；缺少快照的消息保持原有内容。
-    if (curModel == "deepseek-flash"&& reminder && reminder !== previousReminder) {
+    if (modelInfo.latestReminder && reminder && reminder !== previousReminder) {
       messages.push({ role: 'latest_reminder', content: reminder })
       previousReminder = reminder
     }
   }
   for (const [user, reply] of getContextRounds(history)) {
     // 历史提问没有文字、附件也都没有 serverId 时，提问为空，连同回答一起省略。
-    if (!user.content && toFileBlocks(user.files).length === 0) {
+    if (!user.content && toFileBlocks(user.files, filesSupported).length === 0) {
       continue
     }
     appendReminder(reply.latestReminder)
-    messages.push(toUserParam(user), toAssistantParam(reply))
+    messages.push(
+      toUserParam(user, filesSupported),
+      toAssistantParam(reply, false, false, modelInfo.deepseekExtensions)
+    )
   }
   appendReminder(latestReminder)
-  messages.push(toUserParam(question))
+  messages.push(toUserParam(question, filesSupported))
   if (prefix?.prefix) {
-    const assistant = toAssistantParam(prefix, true, thinking)
+    const assistant = toAssistantParam(prefix, true, thinking, modelInfo.deepseekExtensions)
     // 没有非空白正文或有效思考时直接重发原问题，避免服务端拒绝空 Prefill。
     if (
       assistant.content.some(

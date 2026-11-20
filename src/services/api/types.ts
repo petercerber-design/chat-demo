@@ -1,10 +1,13 @@
+import type { ChatModel } from './providers.js'
+
 /**
  * Messages API（Anthropic 兼容格式）协议类型，只取本应用用到的部分。
  * 文档：https://api-docs.deepseek.com/zh-cn/api/create-message
  * 声明 deepseek_web_search / deepseek_read_url 或设置 safety_check.level 为 high 时进入扩展模式。
+ * 模型列表与各模型能力见 providers.ts。
  */
 
-export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro'
+export type { ChatModel } from './providers.js'
 
 // ---------- 响应：内容块 ----------
 
@@ -172,16 +175,21 @@ export type DeepseekReadUrlTool = {
   name: 'deepseek_read_url'
 }
 
+/**
+ * POST /anthropic/v1/messages 的请求体。
+ * 只有 Anthropic 标准字段在所有来源通用，其余按 providers.ts 的能力标记选择性发送。
+ */
 export type CreateMessageRequest = {
   model: ChatModel
   system: string
   messages: MessageParam[]
-  thinking: { type: 'enabled' | 'disabled' }
-  tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
-  safety_check: { level: 'low' | 'high' }
+  max_tokens: number
+  /** DeepSeek 只需 type；Anthropic 兼容的服务（如 GLM）在开启时还需要 budget_tokens */
+  thinking?: { type: 'enabled'; budget_tokens?: number } | { type: 'disabled' }
+  tools?: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
+  safety_check?: { level: 'low' | 'high' }
   title?: { enabled: boolean }
-  max_token?: number,
-  output_config?:any
+  output_config?: { effort: string }
 }
 
 // ---------- 响应：流式事件 ----------

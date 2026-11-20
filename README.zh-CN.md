@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-基于 DeepSeek API 的静态聊天示例。无需应用后端，浏览器直接请求配置的 API 服务。
+基于 DeepSeek 与智谱 GLM API 的静态聊天示例。无需应用后端，浏览器直接请求配置的 API 服务。
 
 点击 [在线体验](https://deepseek-ai.github.io/chat-demo/) 即可使用，也可以前往 [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases) 下载压缩包，解压后双击 `index.html` 在本地使用，无需安装或构建。首次使用时，请在设置中填写 API Key。
 
@@ -30,6 +30,7 @@ pnpm build
 ## 功能
 
 - 多会话、自动标题、重命名与删除；编辑提问、重新生成和切换消息分支。
+- 在「设置 → 模型设置」中选择模型来源（DeepSeek / 智谱 GLM）与模型，各来源的 API Key 分开保存。
 - 流式回答、深度思考、智能搜索、链接阅读与来源引用；支持停止和符合条件的继续生成。
 - 附件上传、粘贴与拖拽，语音输入和回复朗读；移动端录音时输入框首行显示实时频谱。
 - Markdown、代码高亮、KaTeX 公式和 Mermaid 图表。
@@ -37,7 +38,7 @@ pnpm build
 
 ## 数据
 
-API Key 和设置保存在浏览器 localStorage，会话及附件原件保存在 IndexedDB，本地数据按浏览器用户配置和站点源（origin）隔离。发送对话、上传附件和使用语音功能时，相应内容会提交给配置的 API 服务。
+API Key（每个模型来源各一份）和设置保存在浏览器 localStorage，会话及附件原件保存在 IndexedDB，本地数据按浏览器用户配置和站点源（origin）隔离。发送对话、上传附件和使用语音功能时，相应内容会提交给配置的 API 服务。
 
 设置中的历史导入导出使用 ZIP 格式。导入会在确认并校验成功后替换全部本地会话和附件；导出包含会话与本地可用的图片原件，不包含 API Key、设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。
 
@@ -55,7 +56,7 @@ API Key 和设置保存在浏览器 localStorage，会话及附件原件保存�
 
 [rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理。
 
-聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+聊天模型与来源在 [src/services/api/providers.ts](src/services/api/providers.ts) 中登记：新增来源后会自动出现在设置界面，每个来源使用各自的 API Key 与完整接口地址。DeepSeek 使用构建期配置的 `apiOrigin`，GLM 使用 Claude 兼容地址 `https://open.bigmodel.cn/api/anthropic`（消息接口为 `https://open.bigmodel.cn/api/anthropic/v1/messages`）。附件依赖 DeepSeek Files API，不支持 Files 的来源会禁用附件入口；语音（ASR / TTS）也始终使用 DeepSeek 的 Key。请求会为 DeepSeek 携带搜索、链接阅读、标题和 `latest_reminder` 等扩展，其它来源只发送 Anthropic 标准字段。
 
 ```text
 src/

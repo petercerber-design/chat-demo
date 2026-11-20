@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { useSettings } from '../../services/settings.js'
+import { useModelConfig } from '../../services/chat/config.js'
+import { getApiKey } from '../../services/settings.js'
 
 /** 设置弹窗的分组：通用设置 / 模型设置 / 数据管理 */
 export type SettingsSection = 'general' | 'model' | 'data'
@@ -15,11 +16,14 @@ export const openSettings = (section: SettingsSection) =>
 
 export const closeSettings = () => useSettingsDialog.setState({ open: false })
 
-/** 没有 API Key 时打开设置并选中 API Key 所在的「数据管理」，返回是否已有 Key */
+/**
+ * 没有当前模型来源的 API Key 时打开「模型设置」（Key 与模型来源在一起设置），返回是否已有 Key。
+ * 每个来源的 Key 分开保存，切换来源后需要各自的 Key。
+ */
 export const ensureApiKey = () => {
-  if (useSettings.getState().apiKey) {
+  if (getApiKey(useModelConfig.getState().provider)) {
     return true
   }
-  openSettings('data')
+  openSettings('model')
   return false
 }

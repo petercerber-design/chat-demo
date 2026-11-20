@@ -3,7 +3,7 @@ import type { TranslationMessage } from '../../i18n/index.js'
 import { ApiError } from '../api/client.js'
 import { classifyApiError } from '../api/errors.js'
 import { synthesize, TTS_SAMPLE_RATE } from '../api/speech.js'
-import { useSettings } from '../settings.js'
+import { getApiKey, useSettings } from '../settings.js'
 
 /**
  * 朗读：同一时间只读一条回复。
@@ -91,8 +91,9 @@ export const toggleReadAloud = (
   const context = new AudioContext({ sampleRate: TTS_SAMPLE_RATE })
   current = { controller, context }
   useReadAloud.setState({ messageId, status: 'loading' })
-  // 音色在开始朗读时读取，设置中切换后下一次朗读生效
-  const { apiKey, ttsVoice } = useSettings.getState()
+  // 音色在开始朗读时读取，设置中切换后下一次朗读生效；朗读使用 DeepSeek TTS
+  const { ttsVoice } = useSettings.getState()
+  const apiKey = getApiKey('deepseek')
 
   void (async () => {
     let nextTime = 0

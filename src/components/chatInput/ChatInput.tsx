@@ -7,8 +7,10 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import { setSearch, setThinking, getApiKey, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
+import { providerSupportsFiles } from '../../services/api/providers.js'
+import { useModelConfig } from '../../services/chat/config.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
   addDraftFiles,
@@ -53,6 +55,9 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  // 附件依赖 DeepSeek Files API，其它来源（如 GLM）不支持时禁用上传入口
+  const provider = useModelConfig((state) => state.provider)
+  const supportsFiles = providerSupportsFiles(provider)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -75,10 +80,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    if (!supportsFiles) {
+      showToast({ key: 'attachmentsUnsupported' })
+      return
+    }
+    if (!ensureApiKey()) {
+      return
+    }
+    // 上传走 DeepSeek Files API，固定使用 DeepSeek 的 Key
+    const error = addDraftFiles(sessionId, files, getApiKey('deepseek') ?? '')
     if (error) {
       showToast(error)
     }
@@ -86,7 +99,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const retryFile = useCallback(
     (id: string) => {
       if (!useChatStore.getState().importingHistory && ensureApiKey()) {
-        retryDraftAttachment(sessionId, id, useSettings.getState().apiKey ?? '')
+        retryDraftAttachment(sessionId, id, getApiKey('deepseek') ?? '')
       }
     },
     [sessionId]
@@ -138,6 +151,11 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
       voice.status !== 'idle' ||
       !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks)
     ) {
+      return
+    }
+    // 草稿里的附件无法发给不支持 Files API 的来源，避免静默丢弃
+    if (!supportsFiles && attachments.length > 0) {
+      showToast({ key: 'attachmentsUnsupported' })
       return
     }
     // 文本与上传完成态由提交动作读取最新快照，不使用上一次渲染的草稿。
@@ -237,7 +255,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
                 voice.status !== 'idle' ||
                 (!useChatStore.getState().importingHistory && ensureApiKey())
               ) {
-                void voice.toggle()
+                // 语音识别仍使用 DeepSeek ASR，没有 DeepSeek Key 时直接提示
+                if (voice.status !== 'idle' || getApiKey('deepseek')) {
+                  void voice.toggle()
+                } else {
+                  showToast({ key: 'voiceRequiresDeepSeekKey' })
+                }
               }
             }}
           />
@@ -245,8 +268,8 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             size="m"
             tone="primary"
             icon={<IconPaperclipOutline16 />}
-            tooltip={t('uploadFile')}
-            disabled={importingHistory}
+            tooltip={supportsFiles ? t('uploadFile') : t('attachmentsUnsupported')}
+            disabled={importingHistory || !supportsFiles}
             onClick={() => ensureApiKey() && fileInputRef.current?.click()}
           />
           <input

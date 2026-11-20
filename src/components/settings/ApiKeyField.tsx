@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { IconEditOutline16 } from '../base/icons.js'
+import { getProviderInfo, type ProviderId } from '../../services/api/providers.js'
 import { useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { IconButton } from '../base/IconButton.js'
@@ -7,26 +8,28 @@ import { useApiKeyForm } from './useApiKeyForm.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './Settings.module.css'
 
-/** API Key 的编辑状态：输入框与移动端底部的「确定」按钮共用 */
-export const useApiKeyEditor = () => {
-  const apiKey = useSettings((state) => state.apiKey)
+/** 某个模型来源的 API Key 编辑状态：输入框与移动端底部的「确定」按钮共用 */
+export const useApiKeyEditor = (provider: ProviderId) => {
+  const apiKey = useSettings((state) => state.apiKeys[provider] ?? null)
   const [editing, setEditing] = useState(false)
-  const form = useApiKeyForm(() => setEditing(false))
-  return { apiKey, editing, setEditing, form, showInput: !apiKey || editing }
+  const form = useApiKeyForm(provider, () => setEditing(false))
+  return { provider, apiKey, editing, setEditing, form, showInput: !apiKey || editing }
 }
 
 type ApiKeyEditor = ReturnType<typeof useApiKeyEditor>
 
-/** API Key：保存后只显示掩码，点编辑按钮才能重新输入 */
+/** API Key：保存后只显示掩码，点编辑按钮才能重新输入；不同来源分别显示自己的 Key */
 export const ApiKeyField = ({ editor }: { editor: ApiKeyEditor }) => {
   const t = useTranslate()
   const isMobile = useIsMobile()
-  const { apiKey, editing, setEditing, form, showInput } = editor
+  const { provider, apiKey, editing, setEditing, form, showInput } = editor
+  const providerLabel = getProviderInfo(provider).label
 
   return (
     <div className={styles.cell}>
       <div className={styles.apiKey}>
-        <div className={styles.label}>{t('apiKeyStart')}</div>
+        <div className={styles.label}>{t('apiKeyForProvider', { provider: providerLabel })}</div>
+        <div className={styles.description}>{t('apiKeyProviderDescription')}</div>
         {apiKey && !editing ? (
           <div className={styles.apiKeySaved}>
             <span className={styles.apiKeyMask}>{'*'.repeat(apiKey.length)}</span>

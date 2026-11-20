@@ -23,13 +23,20 @@ import {
   setFileRetryLimit,
   setMaxTokens,
   setModel,
+  setProvider,
   setSafetyCheckLevel,
   setSessionCacheLimit,
   setSystemPrompt,
   useModelConfig,
   type SafetyCheckLevel,
 } from '../../services/chat/config.js'
-import type { ChatModel } from '../../services/api/types.js'
+import {
+  PROVIDER_IDS,
+  getProviderInfo,
+  getProviderModels,
+  type ChatModel,
+  type ProviderId,
+} from '../../services/api/providers.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -77,11 +84,8 @@ const sections: { value: SettingsSection; label: TranslationKey; icon: ReactNode
 
 const SettingsContent = () => {
   const t = useTranslate()
-  const isMobile = useIsMobile()
   // 打开时按调用方指定的分组选中，之后在弹窗内切换
   const [section, setSection] = useState(() => useSettingsDialog.getState().section)
-  // 切换分组不丢失正在输入的 API Key 与导入状态
-  const apiKeyEditor = useApiKeyEditor()
   const historyImport = useHistoryImport()
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
@@ -123,19 +127,9 @@ const SettingsContent = () => {
               <LocationSetting />
             </>
           ) : section === 'model' ? (
-            <>
-              <ModelSetting />
-              <MaxTokensSetting />
-              <SystemPromptSetting />
-              <SessionCacheLimitSetting />
-              <SafetyCheckSetting />
-              <FileRetryLimitSetting />
-              <FileRetryBaseDelaySetting />
-              <ResetModelSetting />
-            </>
+            <ModelSettings />
           ) : (
             <>
-              <ApiKeyField editor={apiKeyEditor} />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <SettingCell
@@ -153,7 +147,6 @@ const SettingsContent = () => {
                   </Button>
                 }
               />
-              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
             </>
           )}
         </div>
@@ -346,9 +339,63 @@ const TtsVoiceSetting = () => {
   )
 }
 
+/**
+ * 「模型设置」分组：模型来源、该来源的 API Key 与模型，以及请求参数与重试策略。
+ * 切换来源时重建编辑器，避免把未提交的输入带到另一个来源的 Key 上。
+ */
+const ModelSettings = () => {
+  const provider = useModelConfig((state) => state.provider)
+  return <ModelSettingsBody key={provider} provider={provider} />
+}
+
+const ModelSettingsBody = ({ provider }: { provider: ProviderId }) => {
+  const isMobile = useIsMobile()
+  const apiKeyEditor = useApiKeyEditor(provider)
+  return (
+    <>
+      <ProviderSetting />
+      <ApiKeyField editor={apiKeyEditor} />
+      <ModelSetting />
+      <MaxTokensSetting />
+      <SystemPromptSetting />
+      <SessionCacheLimitSetting />
+      <SafetyCheckSetting />
+      <FileRetryLimitSetting />
+      <FileRetryBaseDelaySetting />
+      <ResetModelSetting />
+      {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
+    </>
+  )
+}
+
+/** 模型来源：决定请求地址、可用模型与 API Key */
+const ProviderSetting = () => {
+  const t = useTranslate()
+  const provider = useModelConfig((state) => state.provider)
+  return (
+    <SettingCell
+      label={t('settingsModelProvider')}
+      description={t('settingsModelProviderDescription')}
+      status={null}
+      action={
+        <Select<ProviderId>
+          ariaLabel={t('settingsModelProvider')}
+          value={provider}
+          options={PROVIDER_IDS.map((id) => ({
+            value: id,
+            label: getProviderInfo(id).label,
+          }))}
+          onChange={setProvider}
+        />
+      }
+    />
+  )
+}
+
 /** 模型分组：请求参数与缓存 / 重试策略，均保存在本机 */
 const ModelSetting = () => {
   const t = useTranslate()
+  const provider = useModelConfig((state) => state.provider)
   const model = useModelConfig((state) => state.model)
   return (
     <SettingCell
@@ -359,10 +406,10 @@ const ModelSetting = () => {
         <Select<ChatModel>
           ariaLabel={t('settingsModelName')}
           value={model}
-          options={[
-            { value: 'deepseek-flash', label: 'deepseek-flash' },
-            { value: 'deepseek-v4-pro', label: 'deepseek-v4-pro' },
-          ]}
+          options={getProviderModels(provider).map((item) => ({
+            value: item.id,
+            label: item.label,
+          }))}
           onChange={setModel}
         />
       }

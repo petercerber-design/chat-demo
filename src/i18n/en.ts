@@ -98,6 +98,9 @@ export const en = {
   settingsModelName: 'Model',
   settingsModelNameDescription:
     'Model used for new requests. Saved chats keep the model they were generated with.',
+  settingsModelProvider: 'Provider',
+  settingsModelProviderDescription:
+    'Choose the service that provides models and API keys. Each provider keeps its own API key.',
   settingsModelMaxTokens: 'Max output tokens',
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
   settingsModelSystemPrompt: 'System prompt',
@@ -132,7 +135,9 @@ export const en = {
   avatarMenuSettingsDialogThemeSelectLightOption: 'Light',
   avatarMenuSettingsDialogThemeSelectDarkOption: 'Dark',
   avatarMenuSettingsDialogThemeSelectSystemOption: 'System',
-  apiKeyStart: 'Enter an API Key to get started',
+  apiKeyForProvider: '{provider} API Key',
+  apiKeyProviderDescription:
+    'Enter an API Key to get started. Each provider keeps its own API key.',
   apiKeyEdit: 'Edit API Key',
   apiKeyPlaceholder: 'Enter API Key',
   apiKeyVerifying: 'Verifying...',
@@ -173,6 +178,9 @@ export const en = {
   deactivatedSearchTooltip: 'Search the web when necessary',
   search: 'Search',
   uploadFile: 'Upload files',
+  attachmentsUnsupported: 'This provider does not support attachments. Switch to a DeepSeek model.',
+  voiceRequiresDeepSeekKey:
+    'Voice input uses DeepSeek endpoints. Add a DeepSeek API key in model settings first.',
   chatInputStopButtonTooltip: 'Stop',
   uploadMaxMBSize: 'File exceeds the size limit ({size} MB). Please adjust and try again.',
   uploadMaxFiles: 'You can upload up to {count} files',

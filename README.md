@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
+A static chat demo powered by the DeepSeek and Zhipu GLM APIs. No application backend is required: the browser connects directly to the configured API service.
 
 You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
 
@@ -30,6 +30,7 @@ The output is written to `dist/`. Deploy it to a static web server or open `dist
 ## Features
 
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
+- Choose the model provider (DeepSeek or Zhipu GLM), the model, and a separate API key for each provider in Settings → Model.
 - Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
 - Upload, paste, or drag and drop attachments; use voice input and read replies aloud. A live audio spectrum appears in the first row of the input area while recording on mobile.
 - Markdown, syntax highlighting, KaTeX math, and Mermaid diagrams.
@@ -37,7 +38,7 @@ The output is written to `dist/`. Deploy it to a static web server or open `dist
 
 ## Data and storage
 
-Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB. Local data is isolated by browser profile and site origin. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+Your API keys (one per model provider) and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB. Local data is isolated by browser profile and site origin. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
 
 History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all local conversations and attachments. Exports include conversations and locally available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details.
 
@@ -55,7 +56,7 @@ Settings → Data → Delete all chats clears all local conversations, original 
 
 [rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default. Use `createConfig({ apiOrigin, devServer })` to customize the API origin and development server proxy.
 
-Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
+Chat models and providers are declared in [src/services/api/providers.ts](src/services/api/providers.ts). Add a provider there to make it available in Settings; each provider keeps its own API key and complete endpoint URLs. DeepSeek uses the build-time `apiOrigin`; GLM uses the Claude-compatible endpoint `https://open.bigmodel.cn/api/anthropic` (messages URL: `https://open.bigmodel.cn/api/anthropic/v1/messages`). Attachments rely on the DeepSeek Files API, so the attachment entry is disabled for providers without Files support; speech features (ASR / TTS) also always use the DeepSeek key. Requests include DeepSeek extensions for search, link reading, titles, and `latest_reminder`; other providers receive only the standard Anthropic fields.
 
 ```text
 src/

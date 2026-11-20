@@ -1,11 +1,22 @@
 import { create } from 'zustand'
-import type { ChatModel } from '../api/types.js'
+import {
+  DEFAULT_PROVIDER,
+  PROVIDER_IDS,
+  getDefaultModel,
+  getProviderOfModel,
+  isChatModel,
+  isProviderId,
+  type ChatModel,
+  type ProviderId,
+} from '../api/providers.js'
 
 /** 安全审核等级：high 时请求进入扩展模式 */
 export type SafetyCheckLevel = 'low' | 'high'
 
 /** 生成请求与本地缓存的可调参数，默认值即原先硬编码在 chat/store.ts 中的常量。 */
 export type ModelConfig = {
+  /** 当前模型来源，决定 API Key 与请求地址 */
+  provider: ProviderId
   model: ChatModel
   maxTokens: number
   systemPrompt: string
@@ -16,7 +27,9 @@ export type ModelConfig = {
 }
 
 const KEYS = {
-  model: 'chat-demo:model',
+  provider: 'chat-demo:provider',
+  /** 旧版只有一个模型设置，读取时迁移到对应来源下 */
+  legacyModel: 'chat-demo:model',
   maxTokens: 'chat-demo:max-tokens',
   systemPrompt: 'chat-demo:system-prompt',
   sessionCacheLimit: 'chat-demo:session-cache-limit',
@@ -24,6 +37,9 @@ const KEYS = {
   fileRetryLimit: 'chat-demo:file-retry-limit',
   fileRetryBaseDelay: 'chat-demo:file-retry-base-delay',
 } as const
+
+/** 每个来源记住自己上次使用的模型，切换来源后再切回来仍保持原选择 */
+const modelStorageKey = (provider: ProviderId) => `chat-demo:model:${provider}`
 
 /** 数值参数的取值范围，读设置和写设置时统一夹取，避免手改 localStorage 写出越界值。 */
 export const MODEL_CONFIG_LIMITS = {
@@ -70,6 +86,7 @@ Verify that all assumptions are stated, notation is consistent, edge cases are c
 
 Respond in the same language as the asked question unless they request otherwise. Use LaTeX for mathematics.`
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
+  provider: DEFAULT_PROVIDER,
   model: 'deepseek-v4-pro',
   maxTokens: 65536,
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
@@ -112,8 +129,28 @@ const initialNumber = (key: string, fallback: number, limits: Limits): number =>
   return Number.isFinite(value) ? clamp(value, limits) : fallback
 }
 
-const initialModel = (): ChatModel =>
-  read(KEYS.model) === 'deepseek-flash' ? 'deepseek-flash' : 'deepseek-v4-pro'
+/** 上次选择的来源；旧版没有保存来源时按已保存的模型推断 */
+const readProvider = (): ProviderId => {
+  const saved = read(KEYS.provider)
+  if (isProviderId(saved)) {
+    return saved
+  }
+  const legacyModel = read(KEYS.legacyModel)
+  return isChatModel(legacyModel) ? getProviderOfModel(legacyModel) : DEFAULT_PROVIDER
+}
+
+/** 来源下上次使用的模型；没有记录时用该来源的默认模型 */
+const readModel = (provider: ProviderId): ChatModel => {
+  const saved = read(modelStorageKey(provider))
+  if (isChatModel(saved) && getProviderOfModel(saved) === provider) {
+    return saved
+  }
+  const legacyModel = read(KEYS.legacyModel)
+  if (isChatModel(legacyModel) && getProviderOfModel(legacyModel) === provider) {
+    return legacyModel
+  }
+  return getDefaultModel(provider)
+}
 
 const initialSafetyCheckLevel = (): SafetyCheckLevel =>
   read(KEYS.safetyCheckLevel) === 'high' ? 'high' : 'low'
@@ -122,9 +159,12 @@ const initialSafetyCheckLevel = (): SafetyCheckLevel =>
 const initialSystemPrompt = (): string =>
   read(KEYS.systemPrompt) ?? DEFAULT_MODEL_CONFIG.systemPrompt
 
+const initialProvider = readProvider()
+
 /** 本机保存的模型参数，设置弹窗的「模型设置」分组读写这里 */
 export const useModelConfig = create<ModelConfig>(() => ({
-  model: initialModel(),
+  provider: initialProvider,
+  model: readModel(initialProvider),
   maxTokens: initialNumber(
     KEYS.maxTokens,
     DEFAULT_MODEL_CONFIG.maxTokens,
@@ -157,9 +197,18 @@ export const getModelConfig = (): ModelConfig => {
     : { ...config, systemPrompt: DEFAULT_MODEL_CONFIG.systemPrompt }
 }
 
+/** 切换模型来源：模型跟着切到该来源上次使用（或默认）的模型 */
+export const setProvider = (provider: ProviderId) => {
+  const model = readModel(provider)
+  write(KEYS.provider, provider)
+  useModelConfig.setState({ provider, model })
+}
+
 export const setModel = (model: ChatModel) => {
-  write(KEYS.model, model)
-  useModelConfig.setState({ model })
+  const provider = getProviderOfModel(model)
+  write(modelStorageKey(provider), model)
+  write(KEYS.provider, provider)
+  useModelConfig.setState({ provider, model })
 }
 
 export const setMaxTokens = (maxTokens: number) => {
@@ -198,6 +247,10 @@ export const setFileRetryBaseDelay = (fileRetryBaseDelay: number) => {
 
 /** 恢复初始默认值：清掉本机保存的键，下次打开页面也回到默认 */
 export const resetModelConfig = () => {
-  Object.values(KEYS).forEach((key) => write(key, null))
+  const keys = new Set<string>([
+    ...Object.values(KEYS),
+    ...PROVIDER_IDS.map((provider) => modelStorageKey(provider)),
+  ])
+  keys.forEach((key) => write(key, null))
   useModelConfig.setState(DEFAULT_MODEL_CONFIG)
 }

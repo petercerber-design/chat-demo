@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { CreateMessageRequest } from '../api/types.js'
+import { getProviderOfModel, providerSupportsFiles, type ProviderId } from '../api/providers.js'
+import { buildMessageRequest } from '../api/request.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
-import { useSettings } from '../settings.js'
+import { getApiKey, useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import { getModelConfig, useModelConfig } from './config.js'
 import * as db from './db.js'
@@ -32,17 +33,6 @@ import {
   type SessionSummary,
   type UserMessage,
 } from './types.js'
-
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
-  }
-  return tools
-}
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
@@ -806,16 +796,26 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
 
 /**
  * 发送前补齐附件的 serverId。
+ * - 只有提供 Files API 的来源才需要补传；其它来源（如 GLM）直接返回，附件不进入请求；
  * - 本轮提问的附件并行补齐，任一失败则整体失败，已成功的照常写回，重试时复用成功结果；
  * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
-const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  signal: AbortSignal,
+  provider: ProviderId
+) => {
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
-  const apiKey = useSettings.getState().apiKey ?? ''
+  if (!providerSupportsFiles(provider)) {
+    return request
+  }
+  // Files API 只有 DeepSeek 提供，附件始终用 DeepSeek 的 Key 上传
+  const apiKey = getApiKey('deepseek') ?? ''
   const serverIds = new Map<string, string>()
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
@@ -976,8 +976,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
       let receivedContent = false
+      const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
+      // 已保存的回答沿用生成时的模型，来源、请求地址与 API Key 也随之确定
+      const curModel = initial.model ?? model
+      const provider = getProviderOfModel(curModel)
+      const filesSupported = providerSupportsFiles(provider)
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
+        const prepared = await prepareFiles(sessionId, request, controller.signal, provider)
         preparing = false
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
@@ -986,9 +991,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
-      
-        const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
-        const curModel =  initial.model ?? model
+
         const messages = toRequestMessages(
           prepared.history,
           prepared.question,
@@ -998,18 +1001,17 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           curModel
         )
         const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
-          {
-            model:curModel,
+          provider,
+          getApiKey(provider) ?? '',
+          buildMessageRequest({
+            model: curModel,
             system: systemPrompt,
-            max_token: maxTokens,
             messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: { level: safetyCheckLevel },
-            output_config:{effort: "max"},
-            tools: curModel == 'deepseek-flash'?serverTools((initial.search ?? false)):[], //  todo pro模型不支持搜索，及生成title
-            // ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-          },
+            maxTokens,
+            thinking: initial.thinking ?? false,
+            search: initial.search ?? false,
+            safetyCheckLevel,
+          }),
           controller.signal
         )
         const blockIndexes = new Map<number, number>()
@@ -1052,6 +1054,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
         if (
+          filesSupported &&
           attempt < getModelConfig().fileRetryLimit &&
           !receivedContent &&
           reuploadInvalidatedFiles(sessionId, request, error)
