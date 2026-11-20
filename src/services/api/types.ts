@@ -189,7 +189,9 @@ export type CreateMessageRequest = {
   tools?: (DeepseekWebSearchTool | DeepseekReadUrlTool)[]
   safety_check?: { level: 'low' | 'high' }
   title?: { enabled: boolean }
-  output_config?: { effort: string }
+  output_config?: { effort: string },
+  reasoning_effort?:string,
+  temperature?:number
 }
 
 // ---------- 响应：流式事件 ----------

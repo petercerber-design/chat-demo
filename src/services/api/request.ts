@@ -57,7 +57,7 @@ export const buildMessageRequest = ({
       body.thinking = thinking ? { type: 'enabled' } : { type: 'disabled' }
     } else if (thinking) {
       // budget_tokens 必须小于 max_tokens；过小的上限无法容纳思考预算时不发送
-      const budgetTokens = Math.min(8192, maxTokens - 1)
+      const budgetTokens = Math.min(32768, maxTokens - 1)
       if (budgetTokens >= 1024) {
         body.thinking = { type: 'enabled', budget_tokens: budgetTokens }
       }
@@ -67,6 +67,10 @@ export const buildMessageRequest = ({
     body.safety_check = { level: safetyCheckLevel }
     body.output_config = { effort: 'max' }
     body.tools = info.serverTools ? serverTools(search) : []
+  } else{
+    body.reasoning_effort = "max"
+    body.output_config = { effort: 'max' }
+    body.temperature = 0.2
   }
   return body
 }
