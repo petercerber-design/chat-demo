@@ -986,26 +986,29 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
+      
+        const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
+        const curModel =  initial.model ?? model
         const messages = toRequestMessages(
           prepared.history,
           prepared.question,
           prepared.prefix,
           initial.thinking ?? false,
-          latestReminder
+          latestReminder,
+          curModel
         )
-        const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
         const events = streamMessage(
           useSettings.getState().apiKey ?? '',
           {
-            model: initial.model ?? model,
+            model:curModel,
             system: systemPrompt,
             max_token: maxTokens,
             messages,
             thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
             safety_check: { level: safetyCheckLevel },
             output_config:{effort: "max"},
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+            tools: curModel == 'deepseek-flash'?serverTools((initial.search ?? false)):[], //  todo pro模型不支持搜索，及生成title
+            // ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
           },
           controller.signal
         )
