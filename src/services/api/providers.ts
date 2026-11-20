@@ -75,7 +75,7 @@ export const PROVIDERS = {
       {
         id: 'glm-5.3',
         label: 'glm-5.3',
-        serverTools: false,
+        serverTools: true,
         deepseekExtensions: false,
         latestReminder: false,
         thinking: true,
@@ -83,7 +83,7 @@ export const PROVIDERS = {
       {
         id: 'glm-5.3-flash',
         label: 'glm-5.3-flash',
-        serverTools: false,
+        serverTools: true,
         deepseekExtensions: false,
         latestReminder: false,
         thinking: true,
@@ -91,7 +91,7 @@ export const PROVIDERS = {
       {
         id: 'glm-5.3-flashx',
         label: 'glm-5.3-flashx',
-        serverTools: false,
+        serverTools: true,
         deepseekExtensions: false,
         latestReminder: false,
         thinking: true,

@@ -7,12 +7,18 @@ import type {
 } from './types.js'
 
 /** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): (DeepseekWebSearchTool | DeepseekReadUrlTool)[] => {
-  const tools: (DeepseekWebSearchTool | DeepseekReadUrlTool)[] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
+const serverTools = (search: boolean,info:any): (DeepseekWebSearchTool | DeepseekReadUrlTool)[] => {
+  const tools :any =[]
+  if (info.deepseekExtensions) {
+    tools.push( { type: 'deepseek_read_url', name: 'deepseek_read_url' },)
+    if (search) {
+      tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
+    }
+  } else {
+    if (search) {
+      // tools.push({ type: 'web_search', web_search: { enable: true, search_engine: 'search_pro_jina' } })
+      // tools.push( { type: 'web_fetch' })
+    }
   }
   return tools
 }
@@ -63,10 +69,10 @@ export const buildMessageRequest = ({
       }
     }
   }
+  body.tools = info.serverTools ? serverTools(search,info) : []
   if (info.deepseekExtensions) {
     body.safety_check = { level: safetyCheckLevel }
     body.output_config = { effort: 'max' }
-    body.tools = info.serverTools ? serverTools(search) : []
   } else{
     body.reasoning_effort = "max"
     body.output_config = { effort: 'max' }
