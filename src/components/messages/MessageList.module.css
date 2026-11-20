@@ -1,3 +1,11 @@
+.wrapper {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .container {
   flex: 1;
   min-height: 0;
@@ -34,4 +42,191 @@
   max-width: calc(100% - 40px);
   margin: 0 auto;
   padding-bottom: 24px;
+}
+
+/* 右侧用户消息快速导航：收起时是一列圆点，悬停展开最近 10 条消息的卡片 */
+.nav {
+  position: absolute;
+  top: 40%;
+  right: 20px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 22px;
+  padding: 6px 3px;
+  border-radius: 12px;
+  transform: translateY(-50%);
+  user-select: none;
+  transition:
+    width var(--ds-transition-duration) var(--ds-ease-in-out),
+    padding var(--ds-transition-duration) var(--ds-ease-in-out),
+    border-radius var(--ds-transition-duration) var(--ds-ease-in-out),
+    background-color var(--ds-transition-duration) var(--ds-ease-in-out);
+
+  &:hover,
+  &:focus-within {
+    width: 360px;
+    padding: 10px;
+    border-radius: 18px;
+    background-color: var(--dsw-alias-bg-layer-2);
+    box-shadow: var(--dsw-shadow-lv3);
+  }
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--dsw-alias-brand-primary);
+  }
+}
+
+.nav:hover .navItem,
+.nav:focus-within .navItem {
+  gap: 16px;
+  height: 36px;
+  padding: 0 8px;
+}
+
+/* 收起时宽度为 0，展开后显示这条消息的摘要 */
+.navLabel {
+  display: block;
+  flex: 0 0 auto;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+  opacity: 0;
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.nav:hover .navLabel,
+.nav:focus-within .navLabel {
+  flex: 1 1 auto;
+  width: auto;
+  opacity: 1;
+}
+
+.navItemActive .navLabel {
+  color: var(--dsw-alias-brand-text);
+}
+
+.navIndicator {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--dsw-alias-label-tertiary);
+  opacity: 0.5;
+  transition:
+    width var(--ds-transition-duration) var(--ds-ease-in-out),
+    height var(--ds-transition-duration) var(--ds-ease-in-out),
+    border-radius var(--ds-transition-duration) var(--ds-ease-in-out),
+    background-color var(--ds-transition-duration) var(--ds-ease-in-out),
+    opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+/* 展开后圆点变成短横线 */
+.nav:hover .navIndicator,
+.nav:focus-within .navIndicator {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.navItemActive .navIndicator {
+  height: 14px;
+  background-color: var(--dsw-alias-brand-primary);
+  opacity: 1;
+}
+
+.nav:hover .navItemActive .navIndicator,
+.nav:focus-within .navItemActive .navIndicator {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* 悬停某行时在卡片左侧展示这条消息的摘要 */
+.navPreview {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background-color: var(--dsw-alias-tooltip-bg);
+  color: var(--dsw-static-neutral-bluish-00);
+  font-size: 14px;
+  line-height: 22px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-50%);
+  /* 卡片开始展开后再出现摘要，避免鼠标掠过时闪一下 */
+  transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out) 0.1s;
+
+  [data-ds-dark-theme] & {
+    color: var(--dsw-alias-label-primary);
+    box-shadow:
+      0 6px 16px 0 rgba(0, 0, 0, 0.08),
+      0 3px 6px -4px rgba(0, 0, 0, 0.12),
+      0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.navItem:hover .navPreview,
+.navItem:focus-visible .navPreview {
+  opacity: 1;
+}
+
+/* 超过 10 条时提示可以滚动查看更早的消息 */
+.navHint {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+  opacity: 0;
+  transition:
+    height var(--ds-transition-duration) var(--ds-ease-in-out),
+    opacity var(--ds-transition-duration) var(--ds-ease-in-out);
+}
+
+.nav:hover .navHint,
+.nav:focus-within .navHint {
+  height: 24px;
+  padding-top: 4px;
+  opacity: 1;
 }
