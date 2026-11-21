@@ -1,4 +1,5 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
+import { resizeUploadImage } from '../../utils/resizeUploadImage.js'
 import { readMessageEvent } from './parseEvent.js'
 import { getDefaultModel, getProviderInfo, type ProviderId } from './providers.js'
 import { readServerSentEvents } from './sse.js'
@@ -150,8 +151,8 @@ export const uploadFile = async (
   if (purpose) {
     form.append('purpose', purpose)
   }
-  form.append('file', file)
-  const response = await request(deepseekFilesUrl(), {
+  form.append('file', purpose === null ? await resizeUploadImage(file, signal) : file)
+  const response = await request(`${ANTHROPIC_BASE_URL}/files`, {
     method: 'POST',
     headers: anthropicHeaders(apiKey, true),
     body: form,
