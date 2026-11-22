@@ -6,6 +6,8 @@
  * - 可空字段用 null 表示；可选字段允许缺省。
  */
 
+import type { ModelProvider } from '../models.js'
+
 /** 2026-11-11T02:33:23.270Z */
 export type Iso8601Utc = string
 
@@ -19,6 +21,10 @@ export type SessionIndexEntry = {
   id: string
   title: string | null
   pinned: boolean
+  /** 会话使用的模型服务商；旧归档缺省时按 deepseek 处理 */
+  model_provider: ModelProvider
+  /** 会话使用的具体模型；旧归档缺省时按 deepseek-v4-pro 处理 */
+  model: string
   message_count: number
   inserted_at: Iso8601Utc
   updated_at: Iso8601Utc
@@ -29,6 +35,10 @@ export type SessionFile = {
   id: string
   title: string | null
   pinned: boolean
+  /** 会话使用的模型服务商；旧归档缺省时按 deepseek 处理 */
+  model_provider: ModelProvider
+  /** 会话使用的具体模型；旧归档缺省时按 deepseek-v4-pro 处理 */
+  model: string
   /** 用户当前停留的消息，线性化消息树的唯一依据 */
   current_message_id: number
   inserted_at: Iso8601Utc

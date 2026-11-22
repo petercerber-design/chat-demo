@@ -29,6 +29,35 @@
   margin-left: 113px;
 }
 
+.model {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+  max-width: 240px;
+  margin-left: 4px;
+  padding: 4px 10px;
+  overflow: hidden;
+  border-radius: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.modelName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.providerName,
+.divider {
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-caption);
+}
+
 .inputContainer {
   position: sticky;
   bottom: 0;

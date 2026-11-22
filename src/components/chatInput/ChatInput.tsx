@@ -9,6 +9,7 @@ import {
 } from '../base/icons.js'
 import { setSearch, setThinking, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
+import { useModelConfig } from '../../services/chat/config.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
   addDraftFiles,
@@ -31,6 +32,7 @@ import { DraftAttachments } from './DraftAttachments.js'
 import { useVoiceInput } from './useVoiceInput.js'
 import { VoiceButton } from './VoiceButton.js'
 import { Spectrum } from './Spectrum.js'
+import { ModelPicker } from './ModelPicker.js'
 import { useTranslate } from '../../i18n/index.js'
 import styles from './ChatInput.module.css'
 
@@ -53,6 +55,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const importingHistory = useChatStore((state) => state.importingHistory)
   const isMobile = useIsMobile()
   const search = useSettings((state) => state.search)
+  const configModel = useModelConfig((state) => state.model)
+  // 已保存的会话使用自己的模型；列表摘要已为旧记录补上默认值。
+  const sessionModel = useChatStore((state) => {
+    if (sessionId === null) {
+      return undefined
+    }
+    return (
+      state.sessionCache[sessionId]?.model ??
+      state.sessions.find((item) => item.id === sessionId)?.model
+    )
+  })
+  const model = sessionModel ?? configModel
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -228,6 +242,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
           </Tooltip>
         </div>
         <div className={styles.right}>
+          <ModelPicker sessionId={sessionId} model={model} disabled={importingHistory} />
           <VoiceButton
             status={voice.status}
             disabled={!voice.available}

@@ -22,14 +22,12 @@ import {
   setFileRetryBaseDelay,
   setFileRetryLimit,
   setMaxTokens,
-  setModel,
   setSafetyCheckLevel,
   setSessionCacheLimit,
   setSystemPrompt,
   useModelConfig,
   type SafetyCheckLevel,
 } from '../../services/chat/config.js'
-import type { ChatModel } from '../../services/api/types.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -124,7 +122,6 @@ const SettingsContent = () => {
             </>
           ) : section === 'model' ? (
             <>
-              <ModelSetting />
               <MaxTokensSetting />
               <SystemPromptSetting />
               <SessionCacheLimitSetting />
@@ -340,30 +337,6 @@ const TtsVoiceSetting = () => {
             { value: 'tide', label: t('settingsTtsVoiceTide') },
           ]}
           onChange={setTtsVoice}
-        />
-      }
-    />
-  )
-}
-
-/** 模型分组：请求参数与缓存 / 重试策略，均保存在本机 */
-const ModelSetting = () => {
-  const t = useTranslate()
-  const model = useModelConfig((state) => state.model)
-  return (
-    <SettingCell
-      label={t('settingsModelName')}
-      description={t('settingsModelNameDescription')}
-      status={null}
-      action={
-        <Select<ChatModel>
-          ariaLabel={t('settingsModelName')}
-          value={model}
-          options={[
-            { value: 'deepseek-flash', label: 'deepseek-flash' },
-            { value: 'deepseek-v4-pro', label: 'deepseek-v4-pro' },
-          ]}
-          onChange={setModel}
         />
       }
     />

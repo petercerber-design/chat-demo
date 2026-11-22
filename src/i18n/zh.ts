@@ -91,7 +91,8 @@ export const zh = {
   settingsTtsVoiceStella: '海星（女声）',
   settingsTtsVoiceTide: '暗潮（男声）',
   settingsModelName: '模型',
-  settingsModelNameDescription: '新生成请求使用的模型，已保存的对话沿用生成时的模型。',
+  settingsModelNameDescription:
+    '模型切换位于输入框右下角；新对话沿用最近选择的模型，已保存的对话使用自己的模型。',
   settingsModelMaxTokens: '最大输出 Token',
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
   settingsModelSystemPrompt: '系统提示词',
@@ -111,7 +112,8 @@ export const zh = {
   settingsModelFileRetryBaseDelayDescription:
     '单位毫秒（100–60000），第 n 次重试等待 2 的 n 次方倍基数。',
   settingsModelReset: '恢复默认参数',
-  settingsModelResetDescription: '把以上参数恢复为内置默认值，已保存的历史对话不受影响。',
+  settingsModelResetDescription:
+    '把以上参数及新对话的默认模型恢复为内置默认值，已保存的历史对话不受影响。',
   settingsModelResetAction: '恢复默认',
   settingsLocation: '位置信息',
   settingsLocationProvince: '请选择省份/地区',

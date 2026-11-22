@@ -1,6 +1,7 @@
 import type { ServerToolUseBlock } from '../../api/types.js'
 import { getVisibleMessages, normalizeSession } from '../branches.js'
 import { describeReply } from '../describe.js'
+import { getSessionModel, getSessionProvider } from '../models.js'
 import type { AssistantMessage, Message, ReplyBlock, Session, UserMessage } from '../types.js'
 import { fail } from './errors.js'
 import type {
@@ -260,6 +261,8 @@ export const toSessionFile = (original: Session, exportImage: ExportImage): Sess
     id: session.id,
     title: session.title || null,
     pinned: false,
+    model_provider: getSessionProvider(session),
+    model: getSessionModel(session),
     // 格式要求非空；空会话没有消息可指向，写 0。
     current_message_id: current ? id(current) : 0,
     inserted_at: iso(session.createdAt),
@@ -272,6 +275,8 @@ export const toIndexEntry = (file: SessionFile): SessionIndexEntry => ({
   id: file.id,
   title: file.title,
   pinned: false,
+  model_provider: file.model_provider,
+  model: file.model,
   message_count: file.messages.length,
   inserted_at: file.inserted_at,
   updated_at: file.updated_at,

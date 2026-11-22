@@ -97,7 +97,7 @@ export const en = {
   settingsTtsVoiceTide: 'Tide (male)',
   settingsModelName: 'Model',
   settingsModelNameDescription:
-    'Model used for new requests. Saved chats keep the model they were generated with.',
+    'Switch models from the bottom-right of the input box. New chats use the most recently selected model; saved chats keep their own.',
   settingsModelMaxTokens: 'Max output tokens',
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
   settingsModelSystemPrompt: 'System prompt',
@@ -119,7 +119,7 @@ export const en = {
     'Milliseconds (100–60000). The n-th retry waits 2 to the power of n times this base.',
   settingsModelReset: 'Restore defaults',
   settingsModelResetDescription:
-    'Restore the parameters above to their built-in defaults. Saved chats are not affected.',
+    'Restore the parameters above and the default model for new chats to their built-in defaults. Saved chats are not affected.',
   settingsModelResetAction: 'Restore',
   settingsLocation: 'Location',
   settingsLocationProvince: 'Select province/region',

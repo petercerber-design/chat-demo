@@ -13,6 +13,7 @@ import type {
   Session,
   UserMessage,
 } from '../types.js'
+import { DEFAULT_MODEL, isChatModel } from '../models.js'
 import { fail } from './errors.js'
 import type { ChatMessage, FileEntry, Fragment, SessionFile } from './format.js'
 import { sessionFilesDir } from './paths.js'
@@ -276,6 +277,9 @@ export const toLocalSession = (file: SessionFile): LocalSession => {
     id: file.id,
     // 空标题按「新对话」显示，导出时还原为 null。
     title: file.title ?? '',
+    provider: file.model_provider,
+    // 归档可能来自以后的版本；本地不认识的模型按默认模型处理。
+    model: isChatModel(file.model) ? file.model : DEFAULT_MODEL,
     createdAt: time(file.inserted_at),
     updatedAt: time(file.updated_at),
     ...buildTree(file),

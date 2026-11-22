@@ -1,5 +1,10 @@
 import type { TranslationMessage } from '../../i18n/index.js'
 import type { ApiErrorKind } from '../api/client.js'
+import {
+  getSessionModel,
+  getSessionProvider,
+  type ModelProvider,
+} from './models.js'
 import type {
   ChatModel,
   MessageUsage,
@@ -77,7 +82,7 @@ export type AssistantMessage = MessageBranch & {
   id: string
   role: 'assistant'
   createdAt: number
-  /** 未记录模型时为 null，续写使用当前默认模型。 */
+  /** 未记录模型时为 null，续写使用所在会话的模型。 */
   model: ChatModel | null
   /** 请求时是否开启深度思考 */
   thinking?: boolean
@@ -110,6 +115,10 @@ export type Message = UserMessage | AssistantMessage
 export type Session = {
   id: string
   title: string
+  /** 会话使用的服务商；旧数据缺省时按 deepseek 处理。 */
+  provider?: ModelProvider
+  /** 会话使用的模型；旧数据缺省时按 deepseek-v4-pro 处理。 */
+  model?: ChatModel
   createdAt: number
   updatedAt: number
   /** 包含所有分支的消息，按创建顺序存储。 */
@@ -118,13 +127,23 @@ export type Session = {
   rootMessageId?: string | null
 }
 
-/** 会话列表元数据；消息只在打开会话时加载。 */
-export type SessionSummary = Pick<Session, 'id' | 'title' | 'createdAt' | 'updatedAt'>
+/** 会话列表元数据；消息只在打开会话时加载。模型字段保证有值，旧记录读取时补默认值。 */
+export type SessionSummary = Pick<Session, 'id' | 'title' | 'createdAt' | 'updatedAt'> & {
+  provider: ModelProvider
+  model: ChatModel
+}
 
-/** 显式提取字段，避免将完整会话的消息带进列表。 */
-export const toSessionSummary = (session: SessionSummary): SessionSummary => ({
+export type SessionMeta = Pick<Session, 'id' | 'title' | 'createdAt' | 'updatedAt'> & {
+  provider?: ModelProvider
+  model?: ChatModel
+}
+
+/** 显式提取字段，避免将完整会话的消息带进列表。旧记录没有模型字段时按 DeepSeek V4 Pro 处理。 */
+export const toSessionSummary = (session: SessionMeta): SessionSummary => ({
   id: session.id,
   title: session.title,
   createdAt: session.createdAt,
   updatedAt: session.updatedAt,
+  provider: getSessionProvider(session),
+  model: getSessionModel(session),
 })

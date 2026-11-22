@@ -1,0 +1,68 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  max-width: 176px;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  background-color: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition-property: border, background;
+  transition-duration: 0.2s;
+
+  &:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-alias-button-primary-fill);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.open {
+  background-color: var(--dsw-alias-button-ghost-active-fill);
+  color: var(--dsw-alias-brand-text);
+  border-color: var(--dsw-alias-button-ghost-active-border);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chevron {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@media not all and (min-width: 480px) {
+  .trigger {
+    max-width: none;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  /* 窄屏只保留服务商图标和箭头，当前模型在会话顶部与菜单中可见 */
+  .label {
+    display: none;
+  }
+}

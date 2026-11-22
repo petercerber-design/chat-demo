@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { CreateMessageRequest } from '../api/types.js'
+import type { ChatModel, CreateMessageRequest } from '../api/types.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import {
   cancelUpload,
@@ -12,8 +12,9 @@ import {
 } from '../attachments.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
-import { getModelConfig, useModelConfig } from './config.js'
+import { getModelConfig, setModel, useModelConfig } from './config.js'
 import * as db from './db.js'
+import { getSessionModel, getSessionProvider, providerOf } from './models.js'
 import {
   clearAllDrafts,
   clearDraft,
@@ -35,6 +36,7 @@ import {
   type FileAttachment,
   type Message,
   type Session,
+  type SessionMeta,
   type SessionSummary,
   type UserMessage,
 } from './types.js'
@@ -96,8 +98,12 @@ const getStreamController = (id: string) => {
   return Object.hasOwn(streams, id) ? streams[id] : undefined
 }
 
-const sameSummary = (a: SessionSummary, b: SessionSummary) =>
-  a.title === b.title && a.createdAt === b.createdAt && a.updatedAt === b.updatedAt
+const sameSummary = (a: SessionMeta, b: SessionMeta) =>
+  a.title === b.title &&
+  a.createdAt === b.createdAt &&
+  a.updatedAt === b.updatedAt &&
+  getSessionProvider(a) === getSessionProvider(b) &&
+  getSessionModel(a) === getSessionModel(b)
 
 const sessionAccess = new Map<string, number>()
 const unsavedSessions = new Set<string>()
@@ -257,13 +263,13 @@ export const bindChatPersistence = () => {
 }
 
 /** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
-const createReply = (): AssistantMessage => {
+const createReply = (model: ChatModel = getModelConfig().model): AssistantMessage => {
   const { thinking, search } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: getModelConfig().model,
+    model,
     thinking,
     search,
     prefix: true,
@@ -346,7 +352,17 @@ const ensureSessionLoaded = (id: string): Promise<void> => {
       if (!stored) {
         throw new Error(`Session ${id} is missing from local storage`)
       }
-      const settled = settleInterrupted(normalizeSession(stored))
+      const normalized = normalizeSession(stored)
+      const settled = settleInterrupted(
+        normalized.provider === undefined || normalized.model === undefined
+          ? {
+              ...normalized,
+              // 旧记录没有模型字段：打开时补成 DeepSeek V4 Pro，并随下一次保存落盘。
+              provider: getSessionProvider(normalized),
+              model: getSessionModel(normalized),
+            }
+          : normalized
+      )
       // 读取期间可能已在列表重命名，保留最新元数据，不能让旧读取覆盖它。
       const session = sameSummary(settled, summary) ? settled : { ...settled, ...summary }
       touchSession(id)
@@ -448,6 +464,30 @@ export const newChat = () => {
     set({ activeId: null })
     trimSessionCache()
   }
+}
+
+/**
+ * 切换当前会话的模型，并同时作为新会话的默认模型。
+ * 旧会话没有模型字段时，这里首次切换会补上服务商与模型并落盘。
+ */
+export const setSessionModel = (sessionId: string | null, model: ChatModel) => {
+  if (get().importingHistory) {
+    return
+  }
+  setModel(model)
+  if (sessionId === null || deletingSessions.has(sessionId)) {
+    return
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return
+  }
+  const provider = providerOf(model)
+  if (session.model === model && session.provider === provider) {
+    return
+  }
+  updateSession(sessionId, (current) => ({ ...current, provider, model }))
+  persist(sessionId)
 }
 
 export const selectSession = (id: string) => {
@@ -566,9 +606,12 @@ export const sendMessage = (targetSessionId: string | null) => {
     return false
   }
   if (sessionId === null) {
+    const model = getModelConfig().model
     const session: Session = {
       id: createId(),
       title: '',
+      provider: providerOf(model),
+      model,
       createdAt: now,
       updatedAt: now,
       messages: [],
@@ -603,9 +646,12 @@ export const sendMessage = (targetSessionId: string | null) => {
     })),
     createdAt: now,
   }
-  const reply = createReply()
+  const reply = createReply(getSessionModel(current))
   updateSession(sessionId, (session) => ({
     ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
+    // 旧会话首次继续对话时补上默认模型，导出和后续请求都按会话自己的模型。
+    provider: getSessionProvider(session),
+    model: getSessionModel(session),
     updatedAt: now,
   }))
   if (files.length > 0) {
@@ -637,7 +683,7 @@ export const regenerateReply = (sessionId: string, messageId?: string) => {
     return
   }
   const history = path.slice(0, index - 1)
-  const reply = createReply()
+  const reply = createReply(getSessionModel(session))
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, question.id, [reply]),
     updatedAt: Date.now(),
@@ -669,7 +715,7 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
     files: previous.files,
     createdAt: Date.now(),
   }
-  const reply = createReply()
+  const reply = createReply(getSessionModel(session))
   updateSession(sessionId, (s) => ({
     ...appendBranch(s, path[index - 1]?.id ?? null, [question, reply]),
     updatedAt: Date.now(),
@@ -713,8 +759,8 @@ export const continueReply = (sessionId: string, messageId: string) => {
   const { thinking, search } = useSettings.getState()
   const reply: AssistantMessage = {
     ...previous,
-    // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? getModelConfig().model,
+    // 未记录请求配置的回复，续写时使用会话模型和当前开关。
+    model: previous.model ?? getSessionModel(session),
     thinking: previous.thinking ?? thinking,
     search: previous.search ?? search,
     status: 'pending',

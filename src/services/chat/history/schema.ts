@@ -1,5 +1,10 @@
 import { BackupError, fail } from './errors.js'
 import {
+  DEFAULT_MODEL,
+  DEFAULT_MODEL_PROVIDER,
+  type ModelProvider,
+} from '../models.js'
+import {
   EXPORT_FORMAT_VERSION,
   type ChatMessage,
   type FileEntry,
@@ -67,6 +72,11 @@ const oneOf =
 
 const tipStyle = oneOf('INFO', 'WARNING', 'CAUTION')
 const searchStatus = oneOf('WIP', 'FINISHED', 'FAILED')
+/** 旧归档没有模型字段，按 DeepSeek V4 Pro 读取。 */
+const modelProvider: Read<ModelProvider> = (value) =>
+  value === undefined ? DEFAULT_MODEL_PROVIDER : oneOf('deepseek')(value)
+const modelName: Read<string> = (value) =>
+  value === undefined ? DEFAULT_MODEL : string(value)
 const toolMetadata = (item: Record<string, unknown>) => ({
   ...('stage_id' in item ? { stage_id: count(item.stage_id) } : {}),
   ...('group_id' in item ? { group_id: count(item.group_id) } : {}),
@@ -243,6 +253,8 @@ export const readSessionIndex: Read<SessionIndexEntry[]> = list((value) => {
     id: sessionId(item.id),
     title: nullable(string)(item.title),
     pinned: false,
+    model_provider: modelProvider(item.model_provider),
+    model: modelName(item.model),
     message_count: count(item.message_count),
     inserted_at: time(item.inserted_at),
     updated_at: time(item.updated_at),
@@ -255,6 +267,8 @@ export const readSessionFile: Read<SessionFile> = (value) => {
     id: sessionId(item.id),
     title: nullable(string)(item.title),
     pinned: false,
+    model_provider: modelProvider(item.model_provider),
+    model: modelName(item.model),
     current_message_id: count(item.current_message_id),
     inserted_at: time(item.inserted_at),
     updated_at: time(item.updated_at),

@@ -2,10 +2,12 @@ import clsx from 'clsx'
 import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { IconEditOutline16, IconEllipsisOutline16, IconTrashOutline16 } from '../base/icons.js'
+import { getProviderName } from '../../services/chat/models.js'
 import { renameSession, selectSession } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
+import { ProviderIcon } from '../base/ProviderIcon.js'
 import { closeMobileSider } from './mobileSiderState.js'
 import styles from './SessionItem.module.css'
 
@@ -55,7 +57,12 @@ export const SessionItem = memo(function SessionItem({
         closeMobileSider()
       }}
     >
-      <div className={styles.title}>{displayTitle}</div>
+      <div className={styles.titleRow}>
+        <span className={styles.provider} title={getProviderName(session.provider)}>
+          <ProviderIcon provider={session.provider} size={14} />
+        </span>
+        <span className={styles.title}>{displayTitle}</span>
+      </div>
       <div className={styles.action} onClick={(event) => event.stopPropagation()}>
         <Menu
           options={[
