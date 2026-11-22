@@ -102,7 +102,7 @@ export const en = {
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    'Sampling temperature for Zhipu GLM-5.3 (0–1). Lower is more stable, higher is more varied. Zhipu models only.',
+    'Sampling temperature for Zhipu GLM-5.3 / GLM-5.3-FlashX (0–1, default 0.2). Lower is more stable, higher is more varied. Zhipu models only.',
   settingsModelReasoningEffort: 'Reasoning effort',
   settingsModelReasoningEffortDescription:
     'Thinking effort: max for deep reasoning, high for enhanced reasoning. Applies to DeepSeek output_config and Zhipu reasoning_effort.',

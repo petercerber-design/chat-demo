@@ -1,6 +1,12 @@
 import { ApiError, request } from './client.js'
 import { readServerSentEvents } from './sse.js'
-import { ZHIPU_MODEL, type MessageStreamEvent, type MessageUsage, type StopReason } from './types.js'
+import {
+  ZHIPU_MODEL,
+  type MessageStreamEvent,
+  type MessageUsage,
+  type StopReason,
+  type ZhipuModel,
+} from './types.js'
 
 /**
  * 智谱 OpenAI 兼容接口：
@@ -11,15 +17,13 @@ import { ZHIPU_MODEL, type MessageStreamEvent, type MessageUsage, type StopReaso
  */
 export const ZHIPU_API_ORIGIN = __ZHIPU_API_ORIGIN__
 
-export type ZhipuModel = typeof ZHIPU_MODEL
-
-/** GLM-5.3 的最大输出 Token 数 */
+/** 智谱 GLM 模型的最大输出 Token 数 */
 export const ZHIPU_MAX_OUTPUT_TOKENS = 131_072
 
-/** GLM-5.3 的推理程度：max 深度推理（默认）、high 增强推理 */
+/** 智谱 GLM 模型的推理程度：max 深度推理（默认）、high 增强推理 */
 export type ReasoningEffort = 'max' | 'high'
 
-/** GLM-5.3 只接收文本消息；文件在发送前已由文件解析接口转成文本 */
+/** 智谱 GLM 模型只接收文本消息；文件在发送前已由文件解析接口转成文本 */
 export type ZhipuMessage =
   | { role: 'system'; content: string }
   | { role: 'user'; content: string }
@@ -42,7 +46,9 @@ export type ZhipuWebSearchTool = {
     enable: true
     /** 要调用的搜索引擎编码，接口要求必填 */
     search_engine: ZhipuSearchEngine
-    search_result: true
+    search_result: true,
+    search_intent:true,
+    count:30
   }
 }
 
@@ -51,7 +57,7 @@ export type ZhipuChatRequest = {
   messages: ZhipuMessage[]
   /** 与 OpenAI 一致，固定开启流式 */
   stream: true
-  /** GLM-5.3 不支持关闭思考 */
+  /** GLM-5.3 / GLM-5.3-FlashX 不支持关闭思考 */
   thinking: { type: 'enabled' }
   reasoning_effort: ReasoningEffort
   temperature: number

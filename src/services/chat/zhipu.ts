@@ -1,4 +1,4 @@
-import { ZHIPU_MODEL } from '../api/types.js'
+import type { ZhipuModel } from '../api/types.js'
 import {
   ZHIPU_MAX_OUTPUT_TOKENS,
   type ReasoningEffort,
@@ -14,7 +14,7 @@ const fileSection = (file: FileAttachment) =>
   file.parsedText === undefined ? '' : `[${file.name}]\n${file.parsedText}`
 
 /**
- * GLM-5.3 只接收文本：附件解析出的文本作为提问的一部分放在正文之前，
+ * 智谱 GLM 模型只接收文本：附件解析出的文本作为提问的一部分放在正文之前，
  * 与 DeepSeek 用 file_id 引用附件的请求结构完全不同。
  */
 const toUserMessage = (user: UserMessage): ZhipuMessage | null => {
@@ -64,10 +64,11 @@ export const toZhipuMessages = (
 
 /**
  * 组装智谱 OpenAI 兼容请求：
- * GLM-5.3 强制开启思考（thinking.type 只能传 enabled），推理程度由 reasoning_effort 控制；
+ * GLM-5.3 / GLM-5.3-FlashX 强制开启思考（thinking.type 只能传 enabled），推理程度由 reasoning_effort 控制；
  * 智能搜索对应内置 web_search 工具。
  */
 export const createZhipuRequest = ({
+  model,
   system,
   messages,
   temperature,
@@ -76,6 +77,7 @@ export const createZhipuRequest = ({
   search,
   searchEngine,
 }: {
+  model: ZhipuModel
   system: string
   messages: ZhipuMessage[]
   temperature: number
@@ -84,7 +86,7 @@ export const createZhipuRequest = ({
   search: boolean
   searchEngine: ZhipuSearchEngine
 }): ZhipuChatRequest => ({
-  model: ZHIPU_MODEL,
+  model,
   messages: system.trim() ? [{ role: 'system', content: system }, ...messages] : messages,
   stream: true,
   thinking: { type: 'enabled' },
@@ -95,7 +97,7 @@ export const createZhipuRequest = ({
     ? [
         {
           type: 'web_search',
-          web_search: { enable: true, search_engine: searchEngine, search_result: true },
+          web_search: { enable: true, search_engine: searchEngine, search_result: true ,search_intent:true,count:30},
         },
       ]
     : undefined,

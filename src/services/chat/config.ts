@@ -14,7 +14,7 @@ export type SafetyCheckLevel = 'low' | 'high'
 export type ModelConfig = {
   model: ChatModel
   maxTokens: number
-  /** 智谱 GLM-5.3 的采样温度（0–1）；DeepSeek 请求不使用 */
+  /** 智谱 GLM 模型的采样温度（0–1，默认 0.2）；DeepSeek 请求不使用 */
   temperature: number
   /** 推理程度：DeepSeek 的 output_config.effort 与智谱的 reasoning_effort 共用 */
   reasoningEffort: ReasoningEffort
@@ -88,7 +88,7 @@ Respond in the same language as the asked question unless they request otherwise
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   model: 'deepseek-v4-pro',
   maxTokens: 65536,
-  temperature: 1,
+  temperature: 0.2,
   reasoningEffort: 'max',
   zhipuSearchEngine: 'search_std',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,

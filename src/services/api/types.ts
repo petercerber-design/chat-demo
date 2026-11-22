@@ -4,10 +4,20 @@
  * 声明 deepseek_web_search / deepseek_read_url 或设置 safety_check.level 为 high 时进入扩展模式。
  */
 
-/** 智谱只接入 GLM-5.3；该模型仅支持文本输入，且强制开启深度思考。 */
-export const ZHIPU_MODEL = 'glm-5.3' as const
+/**
+ * 智谱已接入的模型；GLM-5.3 与 GLM-5.3-FlashX 均只支持文本输入，且强制开启深度思考。
+ */
+export const ZHIPU_MODELS = ['glm-5.3', 'glm-5.3-flashx'] as const
 
-export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro' | typeof ZHIPU_MODEL
+export type ZhipuModel = (typeof ZHIPU_MODELS)[number]
+
+/** 默认智谱模型 */
+export const ZHIPU_MODEL: ZhipuModel = 'glm-5.3'
+
+export const isZhipuModel = (value: string): value is ZhipuModel =>
+  (ZHIPU_MODELS as readonly string[]).includes(value)
+
+export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro' | ZhipuModel
 
 // ---------- 响应：内容块 ----------
 

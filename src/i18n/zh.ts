@@ -97,7 +97,7 @@ export const zh = {
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    '智谱 GLM-5.3 的采样温度（0–1），值越低越稳定，越高越发散；仅影响智谱模型。',
+    '智谱 GLM-5.3 / GLM-5.3-FlashX 的采样温度（0–1，默认 0.2），值越低越稳定，越高越发散；仅影响智谱模型。',
   settingsModelReasoningEffort: '推理程度',
   settingsModelReasoningEffortDescription:
     '思考强度：max 为深度推理，high 为增强推理；DeepSeek 通过 output_config、智谱通过 reasoning_effort 生效。',

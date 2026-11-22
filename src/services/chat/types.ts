@@ -23,7 +23,7 @@ export type FileAttachment = {
   id: string
   serverId: string | null
   /**
-   * 智谱文件解析接口返回的纯文本：GLM-5.3 只接收文本，发送时把解析结果拼进提问。
+   * 智谱文件解析接口返回的纯文本：智谱 GLM 模型只接收文本，发送时把解析结果拼进提问。
    * 用 DeepSeek 上传的附件没有该字段。
    */
   parsedText?: string

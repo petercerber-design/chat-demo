@@ -436,7 +436,7 @@ const MaxTokensSetting = () => {
   )
 }
 
-/** 智谱 GLM-5.3 的采样温度；DeepSeek 请求不使用该设置 */
+/** 智谱 GLM 模型的采样温度；DeepSeek 请求不使用该设置 */
 const TemperatureSetting = () => {
   const t = useTranslate()
   const temperature = useModelConfig((state) => state.temperature)

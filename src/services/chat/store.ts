@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import { isZhipuModel, ZHIPU_MODEL, type ChatModel, type CreateMessageRequest } from '../api/types.js'
 import { streamZhipuMessage } from '../api/zhipu.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import {
@@ -292,7 +292,7 @@ const createReply = (model: ChatModel = getModelConfig().model): AssistantMessag
     role: 'assistant',
     createdAt: Date.now(),
     model,
-    // 智谱 GLM-5.3 强制开启思考（thinking.type 不能关闭），回复始终带思考过程。
+    // 智谱 GLM 模型强制开启思考（thinking.type 不能关闭），回复始终带思考过程。
     thinking: providerOf(model) === 'zhipu' ? true : thinking,
     search,
     prefix: true,
@@ -1176,10 +1176,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
         const events =
           provider === 'zhipu'
-            ? // 智谱：OpenAI 兼容接口，GLM-5.3 只接收文本，附件使用解析出的文本
+            ? // 智谱：OpenAI 兼容接口，GLM 模型只接收文本，附件使用解析出的文本
               streamZhipuMessage(
                 apiKey,
                 createZhipuRequest({
+                  // 会话模型属于智谱时按其发送；旧数据异常时回落到默认智谱模型
+                  model: isZhipuModel(curModel) ? curModel : ZHIPU_MODEL,
                   system: systemPrompt,
                   messages: toZhipuMessages(
                     prepared.history,
