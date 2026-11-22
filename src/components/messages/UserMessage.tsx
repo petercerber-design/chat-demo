@@ -4,7 +4,8 @@ import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
 import { IconEditOutline16 } from '../base/icons.js'
 import { getFileViewType, isImage } from '../../services/attachments.js'
-import { editMessage, retryUpload } from '../../services/chat/store.js'
+import { editMessage, retryUpload, useChatStore } from '../../services/chat/store.js'
+import { getSessionProvider } from '../../services/chat/models.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
 import { Button } from '../base/Button.js'
@@ -45,6 +46,11 @@ export const UserMessage = memo(function UserMessage({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isMobile = useIsMobile()
   const canSend = !busy && (draft.trim() !== '' || message.files.length > 0)
+  // 编辑提问后会按会话自己的服务商重新请求，需要对应的 API Key
+  const provider = useChatStore((state) => {
+    const session = state.sessionCache[sessionId]
+    return session ? getSessionProvider(session) : undefined
+  })
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current
@@ -55,7 +61,7 @@ export const UserMessage = memo(function UserMessage({
   }, [editing, draft])
 
   const sendEdit = () => {
-    if (canSend && ensureApiKey() && editMessage(sessionId, message.id, draft.trim())) {
+    if (canSend && ensureApiKey(provider) && editMessage(sessionId, message.id, draft.trim())) {
       stopReadAloud()
       setEditing(false)
     }

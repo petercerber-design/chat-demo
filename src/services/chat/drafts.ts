@@ -6,9 +6,11 @@ import {
   isImage,
   resolveMimeType,
   uploadAttachment,
+  useUploads,
   validateFiles,
   type UploadTask,
 } from '../attachments.js'
+import type { ModelProvider } from './models.js'
 import type { FileAttachment } from './types.js'
 
 export type DraftAttachment = {
@@ -45,14 +47,15 @@ const updateDraft = (sessionId: string | null, update: (draft: Draft) => Draft) 
 export const setDraftText = (sessionId: string | null, text: string) =>
   updateDraft(sessionId, (draft) => ({ ...draft, text }))
 
-const upload = (attachment: DraftAttachment, apiKey: string) => {
+const upload = (attachment: DraftAttachment, apiKey: string, provider: ModelProvider) => {
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
   void uploadAttachment(
     apiKey,
     attachment.id,
     attachment.file,
     attachment.file.name,
-    attachment.isImage
+    attachment.isImage,
+    provider
   ).catch(() => {})
 }
 
@@ -60,12 +63,13 @@ const upload = (attachment: DraftAttachment, apiKey: string) => {
 export const addDraftFiles = (
   sessionId: string | null,
   files: File[],
-  apiKey: string
+  apiKey: string,
+  provider: ModelProvider
 ): TranslationMessage | null => {
   if (files.length === 0) {
     return null
   }
-  const error = validateFiles(files, getDraft(sessionId).attachments.length)
+  const error = validateFiles(files, getDraft(sessionId).attachments.length, provider)
   if (error) {
     return error
   }
@@ -77,36 +81,66 @@ export const addDraftFiles = (
     })
   )
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
-  added.forEach((attachment) => upload(attachment, apiKey))
+  added.forEach((attachment) => upload(attachment, apiKey, provider))
   return null
 }
 
 export const retryDraftAttachment = (
   sessionId: string | null,
   attachmentId: string,
-  apiKey: string
+  apiKey: string,
+  provider: ModelProvider
 ) => {
   const attachment = getDraft(sessionId).attachments.find((item) => item.id === attachmentId)
   if (attachment) {
-    upload(attachment, apiKey)
+    upload(attachment, apiKey, provider)
   }
 }
 
-/** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */
-export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
+/**
+ * 切换服务商后，草稿附件之前的解析/上传结果不能复用：
+ * 按新服务商重新上传（本地原件仍在内存里，无需重新选择文件）。
+ */
+export const reuploadDraftAttachments = (
+  sessionId: string | null,
+  apiKey: string,
+  provider: ModelProvider
+) => {
+  const tasks = useUploads.getState().tasks
+  for (const attachment of getDraft(sessionId).attachments) {
+    const task = tasks[attachment.id]
+    // 已经按当前服务商上传成功的不重复解析（智谱解析按页计费）
+    if (task?.status === 'done' && task.provider === provider) {
+      continue
+    }
+    upload(attachment, apiKey, provider)
+  }
+}
+
+/** 发送按钮和实际提交共用规则：有内容，且全部附件已按当前服务商上传成功。 */
+export const prepareDraftMessage = (
+  draft: Draft,
+  tasks: Record<string, UploadTask>,
+  provider: ModelProvider
+) => {
   const text = draft.text.trim()
   if (!text && draft.attachments.length === 0) {
     return null
   }
-  const files: (FileAttachment & { serverId: string; blob: Blob })[] = []
+  const files: (FileAttachment & { blob: Blob })[] = []
   for (const attachment of draft.attachments) {
     const task = tasks[attachment.id]
-    if (task?.status !== 'done' || !task.serverId) {
+    if (task?.status !== 'done' || task.provider !== provider) {
+      return null
+    }
+    // 智谱以解析文本为准，DeepSeek 以 Files API 的 file_id 为准
+    if (provider === 'zhipu' ? task.text === undefined : !task.serverId) {
       return null
     }
     files.push({
       id: attachment.id,
       serverId: task.serverId,
+      parsedText: task.text,
       name: attachment.file.name,
       size: attachment.file.size,
       isImage: attachment.isImage,

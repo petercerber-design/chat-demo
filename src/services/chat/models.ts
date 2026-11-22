@@ -1,7 +1,8 @@
 import type { ChatModel } from '../api/types.js'
+import { ZHIPU_MODEL } from '../api/types.js'
 
-/** 模型服务商；当前只有 DeepSeek。 */
-export type ModelProvider = 'deepseek'
+/** 模型服务商：DeepSeek 与智谱（OpenAI 兼容接口）。 */
+export type ModelProvider = 'deepseek' | 'zhipu'
 
 /** 没有记录模型的旧会话按 DeepSeek V4 Pro 处理。 */
 export const DEFAULT_MODEL: ChatModel = 'deepseek-v4-pro'
@@ -13,16 +14,18 @@ export type ModelOption = {
   model: ChatModel
 }
 
-/** 可选模型及所属服务商，顺序即模型切换菜单的顺序。 */
+/** 可选模型及所属服务商，顺序即模型切换菜单的顺序。智谱只接入 GLM-5.3。 */
 export const MODEL_OPTIONS: readonly ModelOption[] = [
   { provider: 'deepseek', providerName: 'DeepSeek', model: 'deepseek-flash' },
   { provider: 'deepseek', providerName: 'DeepSeek', model: 'deepseek-v4-pro' },
+  { provider: 'zhipu', providerName: '智谱', model: ZHIPU_MODEL },
 ]
 
 const CHAT_MODELS: readonly string[] = MODEL_OPTIONS.map((option) => option.model)
 
 export const MODEL_PROVIDER_NAMES: Record<ModelProvider, string> = {
   deepseek: 'DeepSeek',
+  zhipu: '智谱',
 }
 
 export const isChatModel = (value: unknown): value is ChatModel =>

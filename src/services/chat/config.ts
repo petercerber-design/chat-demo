@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { ChatModel } from '../api/types.js'
+import type { ReasoningEffort } from '../api/zhipu.js'
+import { isChatModel } from './models.js'
 
 /** 安全审核等级：high 时请求进入扩展模式 */
 export type SafetyCheckLevel = 'low' | 'high'
@@ -8,6 +10,10 @@ export type SafetyCheckLevel = 'low' | 'high'
 export type ModelConfig = {
   model: ChatModel
   maxTokens: number
+  /** 智谱 GLM-5.3 的采样温度（0–1）；DeepSeek 请求不使用 */
+  temperature: number
+  /** 智谱 GLM-5.3 的推理程度；DeepSeek 请求保持原有固定值 */
+  reasoningEffort: ReasoningEffort
   systemPrompt: string
   sessionCacheLimit: number
   safetyCheckLevel: SafetyCheckLevel
@@ -18,6 +24,8 @@ export type ModelConfig = {
 const KEYS = {
   model: 'chat-demo:model',
   maxTokens: 'chat-demo:max-tokens',
+  temperature: 'chat-demo:temperature',
+  reasoningEffort: 'chat-demo:reasoning-effort',
   systemPrompt: 'chat-demo:system-prompt',
   sessionCacheLimit: 'chat-demo:session-cache-limit',
   safetyCheckLevel: 'chat-demo:safety-check-level',
@@ -28,6 +36,7 @@ const KEYS = {
 /** 数值参数的取值范围，读设置和写设置时统一夹取，避免手改 localStorage 写出越界值。 */
 export const MODEL_CONFIG_LIMITS = {
   maxTokens: { min: 1, max: 1_000_000 },
+  temperature: { min: 0, max: 1 },
   sessionCacheLimit: { min: 1, max: 50 },
   fileRetryLimit: { min: 0, max: 10 },
   fileRetryBaseDelay: { min: 100, max: 60_000 },
@@ -72,6 +81,8 @@ Respond in the same language as the asked question unless they request otherwise
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   model: 'deepseek-v4-pro',
   maxTokens: 65536,
+  temperature: 1,
+  reasoningEffort: 'max',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   sessionCacheLimit: 5,
   safetyCheckLevel: 'low',
@@ -112,8 +123,27 @@ const initialNumber = (key: string, fallback: number, limits: Limits): number =>
   return Number.isFinite(value) ? clamp(value, limits) : fallback
 }
 
-const initialModel = (): ChatModel =>
-  read(KEYS.model) === 'deepseek-flash' ? 'deepseek-flash' : 'deepseek-v4-pro'
+const initialModel = (): ChatModel => {
+  const saved = read(KEYS.model)
+  return isChatModel(saved) ? saved : DEFAULT_MODEL_CONFIG.model
+}
+
+/** 温度保留一位小数，未保存或非法时使用默认值 */
+const initialTemperature = (): number => {
+  const saved = read(KEYS.temperature)
+  const value = saved === null || saved.trim() === '' ? NaN : Number(saved)
+  if (!Number.isFinite(value)) {
+    return DEFAULT_MODEL_CONFIG.temperature
+  }
+  const rounded = Math.round(value * 10) / 10
+  return Math.min(
+    Math.max(rounded, MODEL_CONFIG_LIMITS.temperature.min),
+    MODEL_CONFIG_LIMITS.temperature.max
+  )
+}
+
+const initialReasoningEffort = (): ReasoningEffort =>
+  read(KEYS.reasoningEffort) === 'high' ? 'high' : 'max'
 
 const initialSafetyCheckLevel = (): SafetyCheckLevel =>
   read(KEYS.safetyCheckLevel) === 'high' ? 'high' : 'low'
@@ -131,6 +161,8 @@ export const useModelConfig = create<ModelConfig>(() => ({
     MODEL_CONFIG_LIMITS.maxTokens
   ),
   systemPrompt: initialSystemPrompt(),
+  temperature: initialTemperature(),
+  reasoningEffort: initialReasoningEffort(),
   sessionCacheLimit: initialNumber(
     KEYS.sessionCacheLimit,
     DEFAULT_MODEL_CONFIG.sessionCacheLimit,
@@ -171,6 +203,21 @@ export const setMaxTokens = (maxTokens: number) => {
 export const setSystemPrompt = (systemPrompt: string) => {
   write(KEYS.systemPrompt, systemPrompt)
   useModelConfig.setState({ systemPrompt })
+}
+
+export const setTemperature = (temperature: number) => {
+  const rounded = Math.round(temperature * 10) / 10
+  const value = Math.min(
+    Math.max(rounded, MODEL_CONFIG_LIMITS.temperature.min),
+    MODEL_CONFIG_LIMITS.temperature.max
+  )
+  write(KEYS.temperature, String(value))
+  useModelConfig.setState({ temperature: value })
+}
+
+export const setReasoningEffort = (reasoningEffort: ReasoningEffort) => {
+  write(KEYS.reasoningEffort, reasoningEffort)
+  useModelConfig.setState({ reasoningEffort })
 }
 
 export const setSessionCacheLimit = (sessionCacheLimit: number) => {

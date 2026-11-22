@@ -22,6 +22,11 @@ import type {
 export type FileAttachment = {
   id: string
   serverId: string | null
+  /**
+   * 智谱文件解析接口返回的纯文本：GLM-5.3 只接收文本，发送时把解析结果拼进提问。
+   * 用 DeepSeek 上传的附件没有该字段。
+   */
+  parsedText?: string
   /** 当前 serverId 对应的上传图片已确认符合长边限制。旧记录缺少此字段。 */
   imageSizeChecked?: boolean
   name: string

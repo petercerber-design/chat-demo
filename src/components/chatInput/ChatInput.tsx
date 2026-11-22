@@ -7,9 +7,10 @@ import {
   IconStopFill16,
   IconThinkOutline14,
 } from '../base/icons.js'
-import { setSearch, setThinking, useSettings } from '../../services/settings.js'
+import { setSearch, setThinking, getProviderApiKey, useSettings } from '../../services/settings.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useModelConfig } from '../../services/chat/config.js'
+import { providerOf } from '../../services/chat/models.js'
 import { sendMessage, stopReply, useChatStore } from '../../services/chat/store.js'
 import {
   addDraftFiles,
@@ -47,14 +48,6 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   const draft = useDrafts((state) => state.drafts.get(sessionId) ?? EMPTY_DRAFT)
   const { text, attachments } = draft
   const setText = (value: string) => setDraftText(sessionId, value)
-  const draftReady = useUploads((state) => prepareDraftMessage(draft, state.tasks) !== null)
-  const streaming = useChatStore(
-    (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
-  )
-  const thinking = useSettings((state) => state.thinking)
-  const importingHistory = useChatStore((state) => state.importingHistory)
-  const isMobile = useIsMobile()
-  const search = useSettings((state) => state.search)
   const configModel = useModelConfig((state) => state.model)
   // 已保存的会话使用自己的模型；列表摘要已为旧记录补上默认值。
   const sessionModel = useChatStore((state) => {
@@ -67,6 +60,18 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     )
   })
   const model = sessionModel ?? configModel
+  const provider = providerOf(model)
+  // 附件上传结果按服务商区分：切换服务商后需要等重新上传完成才能发送
+  const draftReady = useUploads(
+    (state) => prepareDraftMessage(draft, state.tasks, provider) !== null
+  )
+  const streaming = useChatStore(
+    (state) => sessionId !== null && Object.hasOwn(state.streaming, sessionId)
+  )
+  const thinking = useSettings((state) => state.thinking)
+  const importingHistory = useChatStore((state) => state.importingHistory)
+  const isMobile = useIsMobile()
+  const search = useSettings((state) => state.search)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const togglesRef = useRef<HTMLDivElement>(null)
@@ -89,21 +94,31 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
   }, [t])
 
   const acceptFiles = (files: File[]) => {
-    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey()) {
+    if (files.length === 0 || useChatStore.getState().importingHistory || !ensureApiKey(provider)) {
       return
     }
-    const error = addDraftFiles(sessionId, files, useSettings.getState().apiKey ?? '')
+    const error = addDraftFiles(
+      sessionId,
+      files,
+      getProviderApiKey(useSettings.getState(), provider) ?? '',
+      provider
+    )
     if (error) {
       showToast(error)
     }
   }
   const retryFile = useCallback(
     (id: string) => {
-      if (!useChatStore.getState().importingHistory && ensureApiKey()) {
-        retryDraftAttachment(sessionId, id, useSettings.getState().apiKey ?? '')
+      if (!useChatStore.getState().importingHistory && ensureApiKey(provider)) {
+        retryDraftAttachment(
+          sessionId,
+          id,
+          getProviderApiKey(useSettings.getState(), provider) ?? '',
+          provider
+        )
       }
     },
-    [sessionId]
+    [sessionId, provider]
   )
   const removeFile = useCallback(
     (id: string) => {
@@ -150,12 +165,12 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
     if (
       useChatStore.getState().importingHistory ||
       voice.status !== 'idle' ||
-      !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks)
+      !prepareDraftMessage(getDraft(sessionId), useUploads.getState().tasks, provider)
     ) {
       return
     }
     // 文本与上传完成态由提交动作读取最新快照，不使用上一次渲染的草稿。
-    if (!ensureApiKey() || !sendMessage(sessionId)) {
+    if (!ensureApiKey(provider) || !sendMessage(sessionId)) {
       return
     }
     stopReadAloud()
@@ -262,7 +277,7 @@ const Input = ({ sessionId }: { sessionId: string | null }) => {
             icon={<IconPaperclipOutline16 />}
             tooltip={t('uploadFile')}
             disabled={importingHistory}
-            onClick={() => ensureApiKey() && fileInputRef.current?.click()}
+            onClick={() => ensureApiKey(provider) && fileInputRef.current?.click()}
           />
           <input
             ref={fileInputRef}

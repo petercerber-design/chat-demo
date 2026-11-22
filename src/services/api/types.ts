@@ -4,7 +4,10 @@
  * 声明 deepseek_web_search / deepseek_read_url 或设置 safety_check.level 为 high 时进入扩展模式。
  */
 
-export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro'
+/** 智谱只接入 GLM-5.3；该模型仅支持文本输入，且强制开启深度思考。 */
+export const ZHIPU_MODEL = 'glm-5.3' as const
+
+export type ChatModel = 'deepseek-flash' | 'deepseek-v4-pro' | typeof ZHIPU_MODEL
 
 // ---------- 响应：内容块 ----------
 
@@ -181,7 +184,8 @@ export type CreateMessageRequest = {
   safety_check: { level: 'low' | 'high' }
   title?: { enabled: boolean }
   max_token?: number,
-  output_config?:any
+  /** 扩展模式下的推理程度：DeepSeek 由客户端固定为 max，预留 low / high */
+  output_config?: { effort: 'max' | 'high' | 'low' }
 }
 
 // ---------- 响应：流式事件 ----------

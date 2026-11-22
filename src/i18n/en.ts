@@ -100,6 +100,14 @@ export const en = {
     'Switch models from the bottom-right of the input box. New chats use the most recently selected model; saved chats keep their own.',
   settingsModelMaxTokens: 'Max output tokens',
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
+  settingsModelTemperature: 'Temperature',
+  settingsModelTemperatureDescription:
+    'Sampling temperature for Zhipu GLM-5.3 (0–1). Lower is more stable, higher is more varied. Zhipu models only; DeepSeek requests are unchanged.',
+  settingsModelReasoningEffort: 'Reasoning effort',
+  settingsModelReasoningEffortDescription:
+    'Thinking effort for Zhipu GLM-5.3: max for deep reasoning, high for enhanced reasoning. Zhipu models only.',
+  settingsModelReasoningEffortMax: 'max (deep reasoning)',
+  settingsModelReasoningEffortHigh: 'high (enhanced reasoning)',
   settingsModelSystemPrompt: 'System prompt',
   settingsModelSystemPromptDescription:
     'Assistant identity sent with every request. Leave empty to use the built-in default prompt.',
@@ -132,9 +140,11 @@ export const en = {
   avatarMenuSettingsDialogThemeSelectLightOption: 'Light',
   avatarMenuSettingsDialogThemeSelectDarkOption: 'Dark',
   avatarMenuSettingsDialogThemeSelectSystemOption: 'System',
-  apiKeyStart: 'Enter an API Key to get started',
+  apiKeyStart: 'Enter a DeepSeek API Key to get started',
   apiKeyEdit: 'Edit API Key',
-  apiKeyPlaceholder: 'Enter API Key',
+  apiKeyPlaceholder: 'Enter DeepSeek API Key',
+  apiKeyZhipuStart: 'Enter a Zhipu API Key to get started',
+  apiKeyZhipuPlaceholder: 'Enter Zhipu API Key',
   apiKeyVerifying: 'Verifying...',
   confirm: 'Confirm',
   apiKeyInvalid: 'Invalid API Key. Please check it and try again.',

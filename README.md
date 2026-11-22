@@ -53,9 +53,9 @@ Settings → Data → Delete all chats clears all local conversations, original 
 | `pnpm lint`   | Lint with oxlint             |
 | `pnpm format` | Format with oxfmt            |
 
-[rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default. Use `createConfig({ apiOrigin, devServer })` to customize the API origin and development server proxy.
+[rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default and proxies Zhipu's OpenAI-compatible API through `/zhipu-api` in development. Use `createConfig({ apiOrigin, zhipuApiOrigin, devServer })` to customize the API origins and development server proxy. `open.bigmodel.cn` does not return CORS headers for `/chat/completions`, so a production deployment must point `zhipuApiOrigin` at a same-origin proxy.
 
-Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
+Chat supports DeepSeek (`deepseek-flash` / `deepseek-v4-pro`, Anthropic-compatible Messages / Files APIs) and Zhipu (`glm-5.3` only, OpenAI-compatible chat completions with `thinking` / `reasoning_effort`, plus the synchronous file parser for attachments). DeepSeek requests are unchanged. Speech features use ASR / TTS endpoints and always use the DeepSeek API key. Requests include extensions for search, link reading, titles, and `latest_reminder`, so the configured DeepSeek service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
 
 ```text
 src/

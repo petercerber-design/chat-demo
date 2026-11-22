@@ -4,6 +4,8 @@ import { isUploadImageOversized } from '../utils/resizeUploadImage.js'
 import { uploadFile } from './api/client.js'
 import { classifyApiError, getUploadErrorInfo, isRetryableApiError } from './api/errors.js'
 import type { FilePurpose } from './api/types.js'
+import { parseZhipuFile } from './api/zhipu.js'
+import type { ModelProvider } from './chat/models.js'
 import { loadFile } from './chat/db.js'
 import type { FileAttachment } from './chat/types.js'
 import { ACCEPT_FILE_EXTS } from './uploadExts.js'
@@ -39,20 +41,63 @@ export const getUploadPurpose = (name: string, isImage: boolean): FilePurpose | 
   return LAYOUT_RECOGNITION_EXTS.has(getFileExt(name)) ? 'rich_layout_recognition' : 'user_data'
 }
 
-/** 文件允许的最大体积（MB），按上传时的 purpose 区分 */
-const getMaxSizeMB = (file: File) =>
-  getUploadPurpose(file.name, isImage(resolveMimeType(file))) === 'user_data'
-    ? MAX_USER_DATA_SIZE_MB
-    : MAX_SIZE_MB
+/** 智谱同步解析支持的格式；其余文件在本地按 UTF-8 文本读取 */
+const ZHIPU_PARSER_EXTS = new Set([
+  'pdf',
+  'doc',
+  'docx',
+  'ppt',
+  'pptx',
+  'xls',
+  'xlsx',
+  'png',
+  'jpg',
+  'jpeg',
+  'bmp',
+  'gif',
+  'webp',
+  'tif',
+  'tiff',
+  'heic',
+  'heif',
+])
+
+const ZHIPU_OFFICE_EXTS = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx'])
+const ZHIPU_SMALL_EXTS = new Set(['md', 'txt', 'xls', 'xlsx', 'csv'])
+
+/** 判断附件是否需要交给智谱解析接口；图片与文档需要，代码等纯文本在本地读取 */
+const needsZhipuParsing = (name: string, isImage: boolean) =>
+  isImage || ZHIPU_PARSER_EXTS.has(getFileExt(name))
+
+/** 智谱同步解析：Office/PDF ≤100MB，文本与表格 ≤10MB，图片及其他 ≤20MB */
+const getZhipuMaxSizeMB = (file: File) => {
+  const ext = getFileExt(file.name)
+  if (ZHIPU_OFFICE_EXTS.has(ext)) {
+    return 100
+  }
+  return ZHIPU_SMALL_EXTS.has(ext) ? 10 : 20
+}
+
+/** 文件允许的最大体积（MB），按服务商与上传方式区分 */
+const getMaxSizeMB = (file: File, provider: ModelProvider) =>
+  provider === 'zhipu'
+    ? getZhipuMaxSizeMB(file)
+    : getUploadPurpose(file.name, isImage(resolveMimeType(file))) === 'user_data'
+      ? MAX_USER_DATA_SIZE_MB
+      : MAX_SIZE_MB
 
 /** 添加前校验：格式 → 大小 → 数量，任一不满足即整批不添加 */
-export const validateFiles = (files: File[], currentCount: number): TranslationMessage | null => {
+export const validateFiles = (
+  files: File[],
+  currentCount: number,
+  provider: ModelProvider = 'deepseek'
+): TranslationMessage | null => {
   if (files.some((file) => !isAcceptedExt(file.name))) {
     return { key: 'uploadUnsupportedFormat' }
   }
-  const oversized = files.find((file) => file.size > getMaxSizeMB(file) * 1024 * 1024)
+  const oversized = files.find((file) => file.size > getMaxSizeMB(file, provider) * 1024 * 1024)
   if (oversized) {
-    return { key: 'uploadMaxMBSize', params: { size: getMaxSizeMB(oversized) } }
+    return { key: 'uploadMaxMBSize', params: { size: getMaxSizeMB(oversized, provider) } }
   }
   if (currentCount + files.length > MAX_COUNT) {
     return { key: 'uploadMaxFiles', params: { count: MAX_COUNT } }
@@ -119,15 +164,40 @@ const next = () => {
   }
 }
 
+/** 一次附件上传的结果：DeepSeek 为 Files API 的 file_id；智谱只有解析文本 */
+export type UploadedFile = { serverId: string | null; text?: string }
+
+/** DeepSeek：图片先缩放后按 purpose 上传；智谱：文档/图片交给同步解析，其余按本地文本读取 */
+const uploadWithProvider = async (
+  provider: ModelProvider,
+  apiKey: string,
+  file: File,
+  name: string,
+  isImage: boolean,
+  signal: AbortSignal
+): Promise<UploadedFile> => {
+  if (provider === 'zhipu') {
+    if (needsZhipuParsing(name, isImage)) {
+      const parsed = await parseZhipuFile(apiKey, file, signal)
+      return { serverId: null, text: parsed.text }
+    }
+    signal.throwIfAborted()
+    return { serverId: null, text: await file.text() }
+  }
+  const object = await uploadFile(apiKey, file, getUploadPurpose(name, isImage), signal)
+  return { serverId: object.id }
+}
+
 /** 排队上传，最多同时上传 MAX_CONCURRENT 个；排队期间中止的任务不会发出请求 */
 const enqueueUpload = (
   apiKey: string,
   file: Blob,
   name: string,
   isImage: boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  provider: ModelProvider
 ) =>
-  new Promise<string>((resolve, reject) => {
+  new Promise<UploadedFile>((resolve, reject) => {
     queue.push(async () => {
       if (signal.aborted) {
         reject(signal.reason)
@@ -135,7 +205,7 @@ const enqueueUpload = (
       }
       try {
         const body = file instanceof File ? file : new File([file], name, { type: file.type })
-        resolve((await uploadFile(apiKey, body, getUploadPurpose(name, isImage), signal)).id)
+        resolve(await uploadWithProvider(provider, apiKey, body, name, isImage, signal))
       } catch (error) {
         reject(error)
       }
@@ -144,13 +214,14 @@ const enqueueUpload = (
   })
 
 /**
- * 上传任务按附件的本地 id 登记：输入框选中即开始上传，全部成功后携带 serverId 发送，
+ * 上传任务按附件的本地 id 登记：输入框选中即开始上传，全部成功后携带结果发送，
  * 不会重复上传；导入的历史附件没有任务，发送前按本地原件补传。
  * 任务只在内存里，历史附件补传未完成时，刷新后会在下次请求前重新上传。
+ * provider 记录结果所属服务商，切换模型后需要按新服务商重新上传。
  */
 export type UploadTask =
   | { status: 'uploading' }
-  | { status: 'done'; serverId: string }
+  | { status: 'done'; provider: ModelProvider; serverId: string | null; text?: string }
   | { status: 'error'; error: TranslationMessage; retryable: boolean }
 
 type UploadState = { tasks: Record<string, UploadTask> }
@@ -164,52 +235,76 @@ const setTask = (id: string, task: UploadTask | null) =>
       : Object.fromEntries(Object.entries(state.tasks).filter(([key]) => key !== id)),
   }))
 
-const pending = new Map<string, { promise: Promise<string>; controller: AbortController }>()
+const pending = new Map<
+  string,
+  { promise: Promise<UploadedFile>; controller: AbortController; provider: ModelProvider }
+>()
+/** 每个附件当前有效的上传服务商；旧任务返回时不覆盖新任务的状态 */
+const activeUploads = new Map<string, ModelProvider>()
 
-/** 开始（或复用进行中的）上传，返回服务端 file_id；失败时任务记为 error 并抛出原错误 */
+/** 开始（或复用同一服务商进行中的）上传；失败时任务记为 error 并抛出原错误 */
 export const uploadAttachment = (
   apiKey: string,
   id: string,
   blob: Blob,
   name: string,
-  isImage: boolean
-): Promise<string> => {
+  isImage: boolean,
+  provider: ModelProvider
+): Promise<UploadedFile> => {
   const current = pending.get(id)
-  if (current) {
+  if (current?.provider === provider) {
     return current.promise
   }
+  // 换服务商后旧结果不可复用：中止旧任务，按新服务商重新上传
+  current?.controller.abort()
   const controller = new AbortController()
+  activeUploads.set(id, provider)
   setTask(id, { status: 'uploading' })
-  const promise = enqueueUpload(apiKey, blob, name, isImage, controller.signal)
-    .then((serverId) => {
-      setTask(id, { status: 'done', serverId })
-      return serverId
+  const promise = enqueueUpload(apiKey, blob, name, isImage, controller.signal, provider)
+    .then((uploaded) => {
+      if (activeUploads.get(id) === provider) {
+        setTask(id, {
+          status: 'done',
+          provider,
+          serverId: uploaded.serverId,
+          text: uploaded.text,
+        })
+      }
+      return uploaded
     })
     .catch((error: unknown) => {
-      if (controller.signal.aborted) {
-        setTask(id, null)
-      } else {
-        setTask(id, {
-          status: 'error',
-          error: describeUploadError(error),
-          retryable: isRetryableApiError(error),
-        })
-        const notice = describeUploadQuota(error)
-        if (notice) {
-          for (const listener of noticeListeners) {
-            listener(notice)
+      if (activeUploads.get(id) === provider) {
+        if (controller.signal.aborted) {
+          setTask(id, null)
+        } else {
+          setTask(id, {
+            status: 'error',
+            error: describeUploadError(error),
+            retryable: isRetryableApiError(error),
+          })
+          const notice = describeUploadQuota(error)
+          if (notice) {
+            for (const listener of noticeListeners) {
+              listener(notice)
+            }
           }
         }
       }
       throw error
     })
-    .finally(() => pending.delete(id))
-  pending.set(id, { promise, controller })
+    .finally(() => {
+      if (pending.get(id)?.controller === controller) {
+        pending.delete(id)
+      }
+    })
+  pending.set(id, { promise, controller, provider })
   return promise
 }
 
 export const cancelUpload = (id: string) => {
   pending.get(id)?.controller.abort()
+  pending.delete(id)
+  activeUploads.delete(id)
   setTask(id, null)
 }
 

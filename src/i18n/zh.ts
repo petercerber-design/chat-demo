@@ -95,6 +95,14 @@ export const zh = {
     '模型切换位于输入框右下角；新对话沿用最近选择的模型，已保存的对话使用自己的模型。',
   settingsModelMaxTokens: '最大输出 Token',
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
+  settingsModelTemperature: 'Temperature',
+  settingsModelTemperatureDescription:
+    '智谱 GLM-5.3 的采样温度（0–1），值越低越稳定，越高越发散；仅影响智谱模型，DeepSeek 请求不变。',
+  settingsModelReasoningEffort: '推理程度',
+  settingsModelReasoningEffortDescription:
+    '智谱 GLM-5.3 的思考强度，max 为深度推理，high 为增强推理；仅影响智谱模型。',
+  settingsModelReasoningEffortMax: 'max（深度推理）',
+  settingsModelReasoningEffortHigh: 'high（增强推理）',
   settingsModelSystemPrompt: '系统提示词',
   settingsModelSystemPromptDescription:
     '所有生成请求统一携带的助手身份说明；留空时使用内置默认提示词。',
@@ -126,9 +134,11 @@ export const zh = {
   avatarMenuSettingsDialogThemeSelectLightOption: '浅色',
   avatarMenuSettingsDialogThemeSelectDarkOption: '深色',
   avatarMenuSettingsDialogThemeSelectSystemOption: '跟随系统',
-  apiKeyStart: '输入 API Key 开始使用',
+  apiKeyStart: '输入 DeepSeek API Key 开始使用',
   apiKeyEdit: '修改 API Key',
-  apiKeyPlaceholder: '请输入 API Key',
+  apiKeyPlaceholder: '请输入 DeepSeek API Key',
+  apiKeyZhipuStart: '输入智谱 API Key 开始使用',
+  apiKeyZhipuPlaceholder: '请输入智谱 API Key',
   apiKeyVerifying: '正在验证...',
   confirm: '确定',
   apiKeyInvalid: 'API Key 无效，请检查后重试',

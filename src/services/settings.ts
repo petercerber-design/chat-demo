@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { TtsVoice } from './api/speech.js'
+import type { ModelProvider } from './chat/models.js'
 import { normalizeLocation, type UserLocation } from './location.js'
 
 export type Locale = 'zh-CN' | 'en-US'
@@ -7,9 +8,12 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** 本机设置，存 localStorage：两家服务商的 API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
 type Settings = {
+  /** DeepSeek API Key，语音功能也使用它 */
   apiKey: string | null
+  /** 智谱 API Key */
+  zhipuApiKey: string | null
   locale: Locale
   themePreference: ThemePreference
   location: UserLocation | null
@@ -21,6 +25,7 @@ type Settings = {
 
 const KEYS = {
   apiKey: 'chat-demo:api-key',
+  zhipuApiKey: 'chat-demo:zhipu-api-key',
   locale: 'chat-demo:locale',
   location: 'chat-demo:location',
   themePreference: 'chat-demo:theme-preference',
@@ -89,6 +94,7 @@ const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide'
 
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
+  zhipuApiKey: read(KEYS.zhipuApiKey),
   locale: initialLocale(),
   location: initialLocation(),
   themePreference: initialThemePreference(),
@@ -119,7 +125,18 @@ export const setTtsVoice = (ttsVoice: TtsVoice) => {
   useSettings.setState({ ttsVoice })
 }
 
-export const setApiKey = (apiKey: string | null) => {
+/** 按服务商读取 API Key；语音等 DeepSeek 专有能力固定使用 DeepSeek Key。 */
+export const getProviderApiKey = (
+  state: Pick<Settings, 'apiKey' | 'zhipuApiKey'>,
+  provider: ModelProvider
+): string | null => (provider === 'zhipu' ? state.zhipuApiKey : state.apiKey)
+
+export const setApiKey = (provider: ModelProvider, apiKey: string | null) => {
+  if (provider === 'zhipu') {
+    write(KEYS.zhipuApiKey, apiKey)
+    useSettings.setState({ zhipuApiKey: apiKey })
+    return
+  }
   write(KEYS.apiKey, apiKey)
   useSettings.setState({ apiKey })
 }

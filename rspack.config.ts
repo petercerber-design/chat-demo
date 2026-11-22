@@ -11,6 +11,22 @@ const { version } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8')
 ) as { version: string }
 
+/** 智谱 OpenAI 兼容接口的默认地址 */
+const ZHIPU_API_ORIGIN = 'https://open.bigmodel.cn/api/paas/v4'
+/**
+ * 智谱对话接口不返回 CORS 头，浏览器无法直接请求：
+ * 开发服务器把 /zhipu-api 代理到开放平台；生产环境用 zhipuApiOrigin 指向同源的转发服务。
+ */
+const ZHIPU_DEV_PROXY_PATH = '/zhipu-api'
+const zhipuDevProxy = [
+  {
+    context: [ZHIPU_DEV_PROXY_PATH],
+    target: 'https://open.bigmodel.cn',
+    changeOrigin: true,
+    pathRewrite: { '^/zhipu-api': '/api/paas/v4' },
+  },
+]
+
 const cssLoader = {
   loader: 'builtin:lightningcss-loader',
   options: { targets },
@@ -19,6 +35,8 @@ const cssLoader = {
 type ConfigOptions = {
   /** 公开 API 的地址，注入为 __API_ORIGIN__ */
   apiOrigin?: string
+  /** 智谱 OpenAI 兼容接口的地址，注入为 __ZHIPU_API_ORIGIN__ */
+  zhipuApiOrigin?: string
   /** 开发服务器配置，支持本地接口代理 */
   devServer?: Configuration['devServer']
 }
@@ -26,6 +44,7 @@ type ConfigOptions = {
 /** 创建构建配置，支持自定义 API 地址和开发服务器选项 */
 export const createConfig = ({
   apiOrigin = 'https://api.deepseek.com',
+  zhipuApiOrigin = dev ? ZHIPU_DEV_PROXY_PATH : ZHIPU_API_ORIGIN,
   devServer,
 }: ConfigOptions = {}): Configuration => ({
   mode: dev ? 'development' : 'production',
@@ -80,13 +99,21 @@ export const createConfig = ({
       scriptLoading: 'defer',
       meta: { 'application-version': version },
     }),
-    new rspack.DefinePlugin({ __API_ORIGIN__: JSON.stringify(apiOrigin) }),
+    new rspack.DefinePlugin({
+      __API_ORIGIN__: JSON.stringify(apiOrigin),
+      __ZHIPU_API_ORIGIN__: JSON.stringify(zhipuApiOrigin),
+    }),
     new rspack.CopyRspackPlugin({
       patterns: [{ from: path.resolve(root, 'LICENSE'), to: 'LICENSE', toType: 'file' }],
     }),
   ],
   performance: { hints: false },
-  devServer: { port: 8637, ...devServer },
+  devServer: {
+    port: 8637,
+    // 智谱对话接口不支持浏览器直连，开发时统一经开发服务器转发
+    proxy: zhipuDevProxy,
+    ...devServer,
+  },
 })
 
 // eslint-disable-next-line import/no-default-export

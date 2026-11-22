@@ -22,12 +22,15 @@ import {
   setFileRetryBaseDelay,
   setFileRetryLimit,
   setMaxTokens,
+  setReasoningEffort,
   setSafetyCheckLevel,
   setSessionCacheLimit,
   setSystemPrompt,
+  setTemperature,
   useModelConfig,
   type SafetyCheckLevel,
 } from '../../services/chat/config.js'
+import type { ReasoningEffort } from '../../services/api/zhipu.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -79,7 +82,8 @@ const SettingsContent = () => {
   // 打开时按调用方指定的分组选中，之后在弹窗内切换
   const [section, setSection] = useState(() => useSettingsDialog.getState().section)
   // 切换分组不丢失正在输入的 API Key 与导入状态
-  const apiKeyEditor = useApiKeyEditor()
+  const deepseekKeyEditor = useApiKeyEditor('deepseek')
+  const zhipuKeyEditor = useApiKeyEditor('zhipu')
   const historyImport = useHistoryImport()
   const historyDelete = useHistoryDelete()
   const replacingHistory = useChatStore((state) => state.importingHistory)
@@ -123,6 +127,8 @@ const SettingsContent = () => {
           ) : section === 'model' ? (
             <>
               <MaxTokensSetting />
+              <TemperatureSetting />
+              <ReasoningEffortSetting />
               <SystemPromptSetting />
               <SessionCacheLimitSetting />
               <SafetyCheckSetting />
@@ -132,7 +138,16 @@ const SettingsContent = () => {
             </>
           ) : (
             <>
-              <ApiKeyField editor={apiKeyEditor} />
+              <ApiKeyField
+                editor={deepseekKeyEditor}
+                label={t('apiKeyStart')}
+                placeholder={t('apiKeyPlaceholder')}
+              />
+              <ApiKeyField
+                editor={zhipuKeyEditor}
+                label={t('apiKeyZhipuStart')}
+                placeholder={t('apiKeyZhipuPlaceholder')}
+              />
               <ImportHistory historyImport={historyImport} disabled={historyBusy} />
               <ExportHistory disabled={historyBusy} />
               <SettingCell
@@ -150,7 +165,9 @@ const SettingsContent = () => {
                   </Button>
                 }
               />
-              {isMobile ? <ApiKeyConfirm editor={apiKeyEditor} /> : null}
+              {isMobile ? (
+                <ApiKeyConfirm editors={[deepseekKeyEditor, zhipuKeyEditor]} />
+              ) : null}
             </>
           )}
         </div>
@@ -383,7 +400,10 @@ const NumberSetting = ({
             setDraft(next)
             const parsed = Number(next)
             if (next.trim() !== '' && Number.isFinite(parsed)) {
-              onChange(Math.min(Math.max(Math.round(parsed), min), max))
+              // 按步长的小数位取整，温度等小数参数不会被四舍五入成整数
+              const factor = 10 ** ((String(step).split('.')[1] ?? '').length)
+              const rounded = Math.round(parsed * factor) / factor
+              onChange(Math.min(Math.max(rounded, min), max))
             }
           }}
           onBlur={() => setDraft(String(value))}
@@ -403,6 +423,46 @@ const MaxTokensSetting = () => {
       value={maxTokens}
       {...MODEL_CONFIG_LIMITS.maxTokens}
       onChange={setMaxTokens}
+    />
+  )
+}
+
+/** 智谱 GLM-5.3 的采样温度；DeepSeek 请求不使用该设置 */
+const TemperatureSetting = () => {
+  const t = useTranslate()
+  const temperature = useModelConfig((state) => state.temperature)
+  return (
+    <NumberSetting
+      label={t('settingsModelTemperature')}
+      description={t('settingsModelTemperatureDescription')}
+      value={temperature}
+      {...MODEL_CONFIG_LIMITS.temperature}
+      step={0.1}
+      onChange={setTemperature}
+    />
+  )
+}
+
+/** 智谱 GLM-5.3 的推理程度：max 深度推理 / high 增强推理 */
+const ReasoningEffortSetting = () => {
+  const t = useTranslate()
+  const reasoningEffort = useModelConfig((state) => state.reasoningEffort)
+  return (
+    <SettingCell
+      label={t('settingsModelReasoningEffort')}
+      description={t('settingsModelReasoningEffortDescription')}
+      status={null}
+      action={
+        <Select<ReasoningEffort>
+          ariaLabel={t('settingsModelReasoningEffort')}
+          value={reasoningEffort}
+          options={[
+            { value: 'max', label: t('settingsModelReasoningEffortMax') },
+            { value: 'high', label: t('settingsModelReasoningEffortHigh') },
+          ]}
+          onChange={setReasoningEffort}
+        />
+      }
     />
   )
 }

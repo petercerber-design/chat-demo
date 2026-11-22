@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import { streamZhipuMessage } from '../api/zhipu.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import {
   cancelUpload,
@@ -9,18 +10,20 @@ import {
   describeUploadError,
   uploadAttachment,
   useUploads,
+  type UploadedFile,
 } from '../attachments.js'
-import { useSettings } from '../settings.js'
+import { getProviderApiKey, useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import { getModelConfig, setModel, useModelConfig } from './config.js'
 import * as db from './db.js'
-import { getSessionModel, getSessionProvider, providerOf } from './models.js'
+import { getSessionModel, getSessionProvider, providerOf, type ModelProvider } from './models.js'
 import {
   clearAllDrafts,
   clearDraft,
   clearSentDraft,
   getDraft,
   prepareDraftMessage,
+  reuploadDraftAttachments,
 } from './drafts.js'
 import { createLatestReminder } from './latestReminder.js'
 import {
@@ -30,6 +33,7 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
+import { createZhipuRequest, toZhipuMessages } from './zhipu.js'
 import {
   toSessionSummary,
   type AssistantMessage,
@@ -54,6 +58,12 @@ const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
 
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
+
+/** 智谱接口不返回生成标题：首轮用提问文本（或首个附件名）截断作为会话标题。 */
+const createLocalTitle = ({ content, files }: UserMessage, limit = 40) => {
+  const source = (content.trim() || files[0]?.name || '').replace(/\s+/g, ' ')
+  return Array.from(source).slice(0, limit).join('')
+}
 
 type ChatState = {
   ready: boolean
@@ -96,6 +106,18 @@ const getSession = (id: string) => {
 const getStreamController = (id: string) => {
   const streams = get().streaming
   return Object.hasOwn(streams, id) ? streams[id] : undefined
+}
+
+/** 会话或新对话当前使用的模型；会话详情未加载时读列表摘要。 */
+const getTargetModel = (sessionId: string | null): ChatModel => {
+  if (sessionId === null) {
+    return getModelConfig().model
+  }
+  const session = getSession(sessionId)
+  if (session) {
+    return getSessionModel(session)
+  }
+  return get().sessions.find((item) => item.id === sessionId)?.model ?? getModelConfig().model
 }
 
 const sameSummary = (a: SessionMeta, b: SessionMeta) =>
@@ -270,7 +292,8 @@ const createReply = (model: ChatModel = getModelConfig().model): AssistantMessag
     role: 'assistant',
     createdAt: Date.now(),
     model,
-    thinking,
+    // 智谱 GLM-5.3 强制开启思考（thinking.type 不能关闭），回复始终带思考过程。
+    thinking: providerOf(model) === 'zhipu' ? true : thinking,
     search,
     prefix: true,
     status: 'pending',
@@ -469,12 +492,22 @@ export const newChat = () => {
 /**
  * 切换当前会话的模型，并同时作为新会话的默认模型。
  * 旧会话没有模型字段时，这里首次切换会补上服务商与模型并落盘。
+ * 服务商变化时，草稿附件按新服务商重新上传（DeepSeek 与智谱的附件格式互不通用）。
  */
 export const setSessionModel = (sessionId: string | null, model: ChatModel) => {
   if (get().importingHistory) {
     return
   }
+  const provider = providerOf(model)
+  const providerChanged = providerOf(getTargetModel(sessionId)) !== provider
   setModel(model)
+  if (providerChanged) {
+    reuploadDraftAttachments(
+      sessionId,
+      getProviderApiKey(useSettings.getState(), provider) ?? '',
+      provider
+    )
+  }
   if (sessionId === null || deletingSessions.has(sessionId)) {
     return
   }
@@ -482,7 +515,6 @@ export const setSessionModel = (sessionId: string | null, model: ChatModel) => {
   if (!session) {
     return
   }
-  const provider = providerOf(model)
   if (session.model === model && session.provider === provider) {
     return
   }
@@ -592,7 +624,12 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
   }
-  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
+  const targetModel = getTargetModel(targetSessionId)
+  const prepared = prepareDraftMessage(
+    getDraft(targetSessionId),
+    useUploads.getState().tasks,
+    providerOf(targetModel)
+  )
   if (!prepared) {
     return false
   }
@@ -634,9 +671,11 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
+    files: files.map(({ id, serverId, parsedText, name, size, isImage, mimeType }) => ({
       id,
       serverId,
+      // 智谱附件以解析文本进入请求；DeepSeek 附件没有该字段
+      parsedText,
       // 草稿附件已上传成功，每张图片都在上传前检查过长边，超限的已缩小。
       imageSizeChecked: isImage,
       name,
@@ -802,25 +841,50 @@ export const retryUpload = (sessionId: string, messageId: string) => {
 
 type Request = { history: Message[]; question: UserMessage; prefix?: AssistantMessage }
 
+type ResolvedAttachment = {
+  provider: ModelProvider
+  serverId: string | null
+  text?: string
+}
+
+/** 附件是否已经按当前服务商准备好：智谱看解析文本，DeepSeek 看 file_id */
+const hasAttachmentUpload = (provider: ModelProvider, file: FileAttachment) =>
+  provider === 'zhipu' ? file.parsedText !== undefined : Boolean(file.serverId)
+
 /**
- * 将 serverId 写回所有引用同一附件的消息。传入 null 会清除超限旧图的 ID，触发补传。
+ * 将上传结果写回所有引用同一附件的消息。
+ * - DeepSeek：写入 file_id；serverId 为 null 表示清除超限旧图，触发缩小后补传。
+ * - 智谱：只写入解析文本，不动 serverId，DeepSeek 的 file_id 在切回时仍可复用。
+ * 两种结果各自保留，切换服务商时互不覆盖。
  * 尺寸标记随有效 ID 保存，因为本地保留的是原图，刷新后可以直接复用已检查的上传副本。
  */
-const saveServerIds = (sessionId: string, serverIds: ReadonlyMap<string, string | null>) => {
-  if (serverIds.size === 0) {
+const saveAttachmentUploads = (
+  sessionId: string,
+  updates: ReadonlyMap<string, ResolvedAttachment>
+) => {
+  if (updates.size === 0) {
     return
   }
   updateSession(sessionId, (session) => ({
     ...session,
     messages: session.messages.map((message) =>
-      message.role === 'user' && message.files.some((file) => serverIds.has(file.id))
+      message.role === 'user' && message.files.some((file) => updates.has(file.id))
         ? {
             ...message,
             files: message.files.map((file) => {
-              const serverId = serverIds.get(file.id)
-              return serverId === undefined
-                ? file
-                : { ...file, serverId, imageSizeChecked: file.isImage && serverId !== null }
+              const update = updates.get(file.id)
+              if (update === undefined) {
+                return file
+              }
+              if (update.provider === 'zhipu') {
+                return update.text === undefined ? file : { ...file, parsedText: update.text }
+              }
+              return {
+                ...file,
+                serverId: update.serverId,
+                ...(update.text === undefined ? {} : { parsedText: update.text }),
+                imageSizeChecked: file.isImage && update.serverId !== null,
+              }
             }),
           }
         : message
@@ -830,22 +894,27 @@ const saveServerIds = (sessionId: string, serverIds: ReadonlyMap<string, string 
 }
 
 /**
- * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
+ * 附件按当前服务商准备好的结果：智谱需要解析文本，DeepSeek 需要 Files API 的 file_id。
+ * 已有可用结果直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
-  if (file.serverId) {
-    return file.serverId
+const ensureServerId = async (
+  provider: ModelProvider,
+  apiKey: string,
+  file: FileAttachment
+): Promise<UploadedFile | null> => {
+  if (hasAttachmentUpload(provider, file)) {
+    return { serverId: file.serverId, text: file.parsedText }
   }
   const task = useUploads.getState().tasks[file.id]
-  if (task?.status === 'done') {
-    return task.serverId
+  if (task?.status === 'done' && task.provider === provider) {
+    return { serverId: task.serverId, text: task.text }
   }
   const blob = await db.loadFile(file.id)
   if (!blob) {
     return null
   }
-  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage)
+  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage, provider)
 }
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
@@ -865,43 +934,64 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
 }
 
 /**
- * 发送前补齐附件的 serverId。
+ * 发送前按服务商补齐附件。
  * - 本轮提问的附件并行补齐，任一失败则整体失败，已成功的照常写回，重试时复用成功结果；
- * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
- *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
+ * - 历史轮次（仅进入上下文的）中没有结果的附件，多为导入的图片：从最新的消息往前逐张补传，
+ *   失败静默跳过，该附件不进入本次请求，下次发送时再试；
+ * - DeepSeek 另需检查旧图片长边，超限时清除 ID 触发缩小后补传；智谱上传原件交给解析接口，无需检查。
  */
-const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  signal: AbortSignal,
+  provider: ModelProvider
+) => {
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
-  const apiKey = useSettings.getState().apiKey ?? ''
-  const serverIds = new Map<string, string>()
-  // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
+  const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
+  const uploadsDone = new Map<string, ResolvedAttachment>()
+  // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回结果
   const aborted = new Promise<never>((_, reject) => {
     signal.addEventListener('abort', () => reject(signal.reason), { once: true })
   })
-  // 旧图片超限时先清除 ID，交给下方已有的附件补传流程。
-  const files = [
-    ...request.question.files,
-    ...getContextRounds(request.history).flatMap(([user]) => user.files),
-  ]
-  const checked = await Promise.race([checkImageFileIds(files, signal), aborted])
-  if (checked.size > 0) {
-    saveServerIds(sessionId, checked)
-    request = refreshRequest(sessionId, request)
+  if (provider === 'deepseek') {
+    // 旧图片超限时先清除 ID，交给下方已有的附件补传流程。
+    const files = [
+      ...request.question.files,
+      ...getContextRounds(request.history).flatMap(([user]) => user.files),
+    ]
+    const checked = await Promise.race([checkImageFileIds(files, signal), aborted])
+    if (checked.size > 0) {
+      saveAttachmentUploads(
+        sessionId,
+        new Map<string, ResolvedAttachment>(
+          [...checked].map(([id, serverId]) => [id, { provider: 'deepseek', serverId }])
+        )
+      )
+      request = refreshRequest(sessionId, request)
+    }
   }
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(apiKey, file)
-      if (serverId && serverId !== file.serverId) {
-        serverIds.set(file.id, serverId)
+      const uploaded = await ensureServerId(provider, apiKey, file)
+      if (
+        uploaded &&
+        (uploaded.serverId !== file.serverId ||
+          (uploaded.text !== undefined && uploaded.text !== file.parsedText))
+      ) {
+        uploadsDone.set(file.id, {
+          provider,
+          serverId: uploaded.serverId,
+          text: uploaded.text,
+        })
       }
     })
   )
   void uploads.then(() => {
     if (epoch === historyEpoch) {
-      saveServerIds(sessionId, serverIds)
+      saveAttachmentUploads(sessionId, uploadsDone)
     }
   })
   const results = await Promise.race([uploads, aborted])
@@ -913,7 +1003,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   const pending = new Map<string, FileAttachment>()
   for (const [user] of getContextRounds(request.history).toReversed()) {
     for (const file of user.files) {
-      if (!file.serverId && !serverIds.has(file.id) && !pending.has(file.id)) {
+      if (!hasAttachmentUpload(provider, file) && !uploadsDone.has(file.id) && !pending.has(file.id)) {
         pending.set(file.id, file)
       }
     }
@@ -921,17 +1011,22 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   for (const file of pending.values()) {
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(apiKey, file), aborted])
-      if (serverId) {
-        serverIds.set(file.id, serverId)
-        saveServerIds(sessionId, new Map([[file.id, serverId]]))
+      const uploaded = await Promise.race([ensureServerId(provider, apiKey, file), aborted])
+      if (uploaded) {
+        const update: ResolvedAttachment = {
+          provider,
+          serverId: uploaded.serverId,
+          text: uploaded.text,
+        }
+        uploadsDone.set(file.id, update)
+        saveAttachmentUploads(sessionId, new Map([[file.id, update]]))
       }
     } catch {
       signal.throwIfAborted()
     }
   }
 
-  // 用补齐后的会话重新取历史与提问，保证请求里都是 serverId
+  // 用补齐后的会话重新取历史与提问，保证请求里都是当前服务商可用的附件结果
   const session = getSession(sessionId)
   const resolve = <T extends Message>(message: T): T =>
     (session?.messages.find((m) => m.id === message.id) as T | undefined) ?? message
@@ -1043,11 +1138,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
 
   try {
     for (let attempt = 0; ; attempt += 1) {
+      // 会话可能在使用另一家服务商；附件补齐、API Key 与请求格式都按会话自己的模型选择
+      const provider = providerOf(initial.model ?? getTargetModel(sessionId))
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
       let receivedContent = false
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
+        const prepared = await prepareFiles(sessionId, request, controller.signal, provider)
         preparing = false
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
@@ -1056,32 +1153,68 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
         reply = { ...reply, latestReminder }
         updateReply(sessionId, reply)
         persist(sessionId)
-      
-        const { model, maxTokens, systemPrompt, safetyCheckLevel } = getModelConfig()
-        const curModel =  initial.model ?? model
-        const messages = toRequestMessages(
-          prepared.history,
-          prepared.question,
-          prepared.prefix,
-          initial.thinking ?? false,
-          latestReminder,
-          curModel
-        )
-        const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
-          {
-            model:curModel,
-            system: systemPrompt,
-            max_token: maxTokens,
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: { level: safetyCheckLevel },
-            output_config:{effort: "max"},
-            tools: curModel == 'deepseek-flash'?serverTools((initial.search ?? false)):[], //  todo pro模型不支持搜索，及生成title
-            // ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-          },
-          controller.signal
-        )
+
+        // 智谱不返回生成标题，首轮用本地截取的提问文本填充会话列表。
+        if (provider === 'zhipu' && titleRequests.has(controller) && !controller.signal.aborted) {
+          const title = createLocalTitle(prepared.question)
+          if (title) {
+            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
+          }
+          titleRequests.delete(controller)
+        }
+
+        const {
+          model,
+          maxTokens,
+          systemPrompt,
+          safetyCheckLevel,
+          temperature,
+          reasoningEffort,
+        } = getModelConfig()
+        const curModel = initial.model ?? model
+        const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
+        const events =
+          provider === 'zhipu'
+            ? // 智谱：OpenAI 兼容接口，GLM-5.3 只接收文本，附件使用解析出的文本
+              streamZhipuMessage(
+                apiKey,
+                createZhipuRequest({
+                  system: systemPrompt,
+                  messages: toZhipuMessages(
+                    prepared.history,
+                    prepared.question,
+                    prepared.prefix
+                  ),
+                  temperature,
+                  reasoningEffort,
+                  maxTokens,
+                  search: initial.search ?? false,
+                }),
+                controller.signal
+              )
+            : // DeepSeek：Anthropic 兼容接口，保持原有请求结构
+              streamMessage(
+                apiKey,
+                {
+                  model: curModel,
+                  system: systemPrompt,
+                  max_token: maxTokens,
+                  messages: toRequestMessages(
+                    prepared.history,
+                    prepared.question,
+                    prepared.prefix,
+                    initial.thinking ?? false,
+                    latestReminder,
+                    curModel
+                  ),
+                  thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
+                  safety_check: { level: safetyCheckLevel },
+                  output_config: { effort: 'max' },
+                  tools: curModel == 'deepseek-flash' ? serverTools(initial.search ?? false) : [], //  todo pro模型不支持搜索，及生成title
+                  // ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
+                },
+                controller.signal
+              )
         const blockIndexes = new Map<number, number>()
         for await (const event of events) {
           receivedContent ||= event.type === 'content_block_start'
@@ -1121,7 +1254,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           break
         }
         // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
+        // 只有 DeepSeek 的 file_id 失效可以这样自愈；智谱的解析结果按文本保存，无需重发。
         if (
+          provider === 'deepseek' &&
           attempt < getModelConfig().fileRetryLimit &&
           !receivedContent &&
           reuploadInvalidatedFiles(sessionId, request, error)
