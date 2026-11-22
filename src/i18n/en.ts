@@ -102,7 +102,7 @@ export const en = {
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    'Sampling temperature for Zhipu GLM-5.3 / GLM-5.3-FlashX (0–1, default 0.2). Lower is more stable, higher is more varied. Zhipu models only.',
+    'Sampling temperature for Zhipu GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX (0–1, default 0.2). Lower is more stable, higher is more varied. Zhipu models only.',
   settingsModelReasoningEffort: 'Reasoning effort',
   settingsModelReasoningEffortDescription:
     'Thinking effort: max for deep reasoning, high for enhanced reasoning. Applies to DeepSeek output_config and Zhipu reasoning_effort.',
@@ -115,6 +115,14 @@ export const en = {
   settingsModelZhipuSearchPro: 'search_pro (advanced)',
   settingsModelZhipuSearchSogou: 'search_pro_sogou (Sogou)',
   settingsModelZhipuSearchQuark: 'search_pro_quark (Quark)',
+  settingsModelZhipuSearchCount: 'Search result count',
+  settingsModelZhipuSearchCountDescription:
+    'Number of web pages returned by smart search: 10, 20, 30, 40, or 50 (default 30).',
+  settingsModelZhipuWebFetch: 'Web fetch (web_fetch)',
+  settingsModelZhipuWebFetchDescription:
+    'When a message contains links, fetch their content with the Zhipu reader API and add it to the context. Up to 3 links per message.',
+  settingsModelZhipuWebFetchOn: 'On',
+  settingsModelZhipuWebFetchOff: 'Off',
   settingsModelGroupCommon: 'Common',
   settingsModelGroupDeepseek: 'DeepSeek only',
   settingsModelGroupZhipu: 'Zhipu only',

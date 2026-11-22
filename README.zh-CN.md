@@ -55,7 +55,7 @@ API Key 和设置保存在浏览器 localStorage，会话及附件原件保存�
 
 [rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`，开发时把智谱的 OpenAI 兼容接口代理到 `/zhipu-api`。`createConfig({ apiOrigin, zhipuApiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理。`open.bigmodel.cn` 的 `/chat/completions` 不返回 CORS 头，生产部署需把 `zhipuApiOrigin` 指向同源的转发服务。
 
-聊天支持 DeepSeek（`deepseek-flash` / `deepseek-v4-pro`，Anthropic 兼容的 Messages / Files API）和智谱（`glm-5.3` / `glm-5.3-flashx`，OpenAI 兼容的对话补全，带 `thinking` / `reasoning_effort` / `search_engine`，附件走同步文件解析接口）。模型设置中的「推理程度」同时用于 DeepSeek 的 `output_config` 和智谱的 `reasoning_effort`，DeepSeek 的其他请求扩展保持不变。语音使用 ASR / TTS 接口，固定使用 DeepSeek 的 API Key。DeepSeek 请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+聊天支持 DeepSeek（`deepseek-flash` / `deepseek-v4-pro`，Anthropic 兼容的 Messages / Files API）和智谱（`glm-5.3` / `glm-5.3-flash` / `glm-5.3-flashx`，OpenAI 兼容的对话补全，带 `thinking` / `reasoning_effort` / `web_search`（`search_engine`、`count`），`web_fetch` 通过网页阅读接口实现，附件走同步文件解析接口）。模型设置中的「推理程度」同时用于 DeepSeek 的 `output_config` 和智谱的 `reasoning_effort`，DeepSeek 的其他请求扩展保持不变。语音使用 ASR / TTS 接口，固定使用 DeepSeek 的 API Key。DeepSeek 请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
 
 ```text
 src/

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
 import { ApiError, streamMessage } from '../api/client.js'
 import { isZhipuModel, ZHIPU_MODEL, type ChatModel, type CreateMessageRequest } from '../api/types.js'
-import { streamZhipuMessage } from '../api/zhipu.js'
+import { streamZhipuMessage, readZhipuUrl } from '../api/zhipu.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import {
   cancelUpload,
@@ -33,7 +33,7 @@ import {
   settleReply,
   toRequestMessages,
 } from './reply.js'
-import { createZhipuRequest, toZhipuMessages } from './zhipu.js'
+import { createZhipuRequest, extractUrls, toZhipuMessages } from './zhipu.js'
 import {
   toSessionSummary,
   type AssistantMessage,
@@ -43,6 +43,7 @@ import {
   type SessionMeta,
   type SessionSummary,
   type UserMessage,
+  type WebFetchPage,
 } from './types.js'
 
 /** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
@@ -917,6 +918,51 @@ const ensureServerId = async (
   return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage, provider)
 }
 
+/** 将 web_fetch 读取的网页正文写回提问消息，历史请求沿用，避免重复读取同一链接。 */
+const saveWebFetches = (sessionId: string, messageId: string, webFetches: WebFetchPage[]) => {
+  updateSession(sessionId, (session) => ({
+    ...session,
+    messages: session.messages.map((message) =>
+      message.role === 'user' && message.id === messageId ? { ...message, webFetches } : message
+    ),
+  }))
+  persist(sessionId)
+}
+
+/**
+ * 智谱 web_fetch：读取本条提问中的链接（最多 3 个）并保存到消息上。
+ * 已经读取过的链接直接复用；单个链接失败不阻塞回答，下次发送时会重试。
+ */
+const prepareWebFetches = async (
+  sessionId: string,
+  question: UserMessage,
+  apiKey: string,
+  signal: AbortSignal
+): Promise<UserMessage> => {
+  if (!getModelConfig().zhipuWebFetch) {
+    return question
+  }
+  const existing = question.webFetches ?? []
+  const known = new Set(existing.map((page) => page.url))
+  const urls = extractUrls(question.content).filter((url) => !known.has(url))
+  if (urls.length === 0) {
+    return question
+  }
+  const results = await Promise.allSettled(urls.map((url) => readZhipuUrl(apiKey, url, signal)))
+  signal.throwIfAborted()
+  const pages = [...existing]
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      pages.push(result.value)
+    }
+  }
+  if (pages.length === existing.length) {
+    return question
+  }
+  saveWebFetches(sessionId, question.id, pages)
+  return { ...question, webFetches: pages }
+}
+
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
 const refreshRequest = (sessionId: string, request: Request): Request => {
   const session = getSession(sessionId)
@@ -1140,12 +1186,25 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     for (let attempt = 0; ; attempt += 1) {
       // 会话可能在使用另一家服务商；附件补齐、API Key 与请求格式都按会话自己的模型选择
       const provider = providerOf(initial.model ?? getTargetModel(sessionId))
+      const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
       /** 附件补齐前出错属于上传失败，请求还没有发出 */
       let preparing = true
       let receivedContent = false
       try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal, provider)
+        let prepared = await prepareFiles(sessionId, request, controller.signal, provider)
         preparing = false
+        // 智谱对话接口没有内置 web_fetch：发送前用网页阅读接口读取提问中的链接
+        if (provider === 'zhipu') {
+          prepared = {
+            ...prepared,
+            question: await prepareWebFetches(
+              sessionId,
+              prepared.question,
+              apiKey,
+              controller.signal
+            ),
+          }
+        }
         // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
         const latestReminder = prepared.prefix
           ? prepared.prefix.latestReminder
@@ -1171,9 +1230,9 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           temperature,
           reasoningEffort,
           zhipuSearchEngine,
+          zhipuSearchCount,
         } = getModelConfig()
         const curModel = initial.model ?? model
-        const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
         const events =
           provider === 'zhipu'
             ? // 智谱：OpenAI 兼容接口，GLM 模型只接收文本，附件使用解析出的文本
@@ -1193,6 +1252,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   maxTokens,
                   search: initial.search ?? false,
                   searchEngine: zhipuSearchEngine,
+                  searchCount: zhipuSearchCount,
                 }),
                 controller.signal
               )

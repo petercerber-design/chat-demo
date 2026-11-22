@@ -14,11 +14,12 @@ export type ModelOption = {
   model: ChatModel
 }
 
-/** 可选模型及所属服务商，顺序即模型切换菜单的顺序。智谱接入 GLM-5.3 / GLM-5.3-FlashX。 */
+/** 可选模型及所属服务商，顺序即模型切换菜单的顺序。智谱接入 GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX。 */
 export const MODEL_OPTIONS: readonly ModelOption[] = [
   { provider: 'deepseek', providerName: 'DeepSeek', model: 'deepseek-flash' },
   { provider: 'deepseek', providerName: 'DeepSeek', model: 'deepseek-v4-pro' },
   { provider: 'zhipu', providerName: '智谱', model: ZHIPU_MODEL },
+  { provider: 'zhipu', providerName: '智谱', model: 'glm-5.3-flash' },
   { provider: 'zhipu', providerName: '智谱', model: 'glm-5.3-flashx' },
 ]
 

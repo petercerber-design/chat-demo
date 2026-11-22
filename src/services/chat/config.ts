@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import type { ChatModel } from '../api/types.js'
 import {
+  ZHIPU_SEARCH_COUNTS,
   ZHIPU_SEARCH_ENGINES,
   type ReasoningEffort,
+  type ZhipuSearchCount,
   type ZhipuSearchEngine,
 } from '../api/zhipu.js'
 import { isChatModel } from './models.js'
@@ -20,6 +22,10 @@ export type ModelConfig = {
   reasoningEffort: ReasoningEffort
   /** 智谱智能搜索使用的搜索引擎编码 */
   zhipuSearchEngine: ZhipuSearchEngine
+  /** 智谱智能搜索返回的结果条数 */
+  zhipuSearchCount: ZhipuSearchCount
+  /** 提问中的链接是否用智谱网页阅读（web_fetch）读取正文 */
+  zhipuWebFetch: boolean
   systemPrompt: string
   sessionCacheLimit: number
   safetyCheckLevel: SafetyCheckLevel
@@ -33,6 +39,8 @@ const KEYS = {
   temperature: 'chat-demo:temperature',
   reasoningEffort: 'chat-demo:reasoning-effort',
   zhipuSearchEngine: 'chat-demo:zhipu-search-engine',
+  zhipuSearchCount: 'chat-demo:zhipu-search-count',
+  zhipuWebFetch: 'chat-demo:zhipu-web-fetch',
   systemPrompt: 'chat-demo:system-prompt',
   sessionCacheLimit: 'chat-demo:session-cache-limit',
   safetyCheckLevel: 'chat-demo:safety-check-level',
@@ -91,6 +99,8 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   temperature: 0.2,
   reasoningEffort: 'max',
   zhipuSearchEngine: 'search_std',
+  zhipuSearchCount: 30,
+  zhipuWebFetch: true,
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   sessionCacheLimit: 5,
   safetyCheckLevel: 'low',
@@ -160,6 +170,17 @@ const initialZhipuSearchEngine = (): ZhipuSearchEngine => {
     : DEFAULT_MODEL_CONFIG.zhipuSearchEngine
 }
 
+const initialZhipuSearchCount = (): ZhipuSearchCount => {
+  const saved = read(KEYS.zhipuSearchCount)
+  const value = saved === null ? NaN : Number(saved)
+  return (ZHIPU_SEARCH_COUNTS as readonly number[]).includes(value)
+    ? (value as ZhipuSearchCount)
+    : DEFAULT_MODEL_CONFIG.zhipuSearchCount
+}
+
+/** 网页读取默认开启；只有明确保存过 false 才关闭 */
+const initialZhipuWebFetch = (): boolean => read(KEYS.zhipuWebFetch) !== 'false'
+
 const initialSafetyCheckLevel = (): SafetyCheckLevel =>
   read(KEYS.safetyCheckLevel) === 'high' ? 'high' : 'low'
 
@@ -179,6 +200,8 @@ export const useModelConfig = create<ModelConfig>(() => ({
   temperature: initialTemperature(),
   reasoningEffort: initialReasoningEffort(),
   zhipuSearchEngine: initialZhipuSearchEngine(),
+  zhipuSearchCount: initialZhipuSearchCount(),
+  zhipuWebFetch: initialZhipuWebFetch(),
   sessionCacheLimit: initialNumber(
     KEYS.sessionCacheLimit,
     DEFAULT_MODEL_CONFIG.sessionCacheLimit,
@@ -239,6 +262,16 @@ export const setReasoningEffort = (reasoningEffort: ReasoningEffort) => {
 export const setZhipuSearchEngine = (zhipuSearchEngine: ZhipuSearchEngine) => {
   write(KEYS.zhipuSearchEngine, zhipuSearchEngine)
   useModelConfig.setState({ zhipuSearchEngine })
+}
+
+export const setZhipuSearchCount = (zhipuSearchCount: ZhipuSearchCount) => {
+  write(KEYS.zhipuSearchCount, String(zhipuSearchCount))
+  useModelConfig.setState({ zhipuSearchCount })
+}
+
+export const setZhipuWebFetch = (zhipuWebFetch: boolean) => {
+  write(KEYS.zhipuWebFetch, String(zhipuWebFetch))
+  useModelConfig.setState({ zhipuWebFetch })
 }
 
 export const setSessionCacheLimit = (sessionCacheLimit: number) => {

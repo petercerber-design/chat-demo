@@ -44,11 +44,20 @@ type MessageBranch = {
   selectedChildId?: string
 }
 
+/** 智谱 web_fetch 读取的网页正文；DeepSeek 由服务端 read_url 工具处理，不使用该字段。 */
+export type WebFetchPage = {
+  url: string
+  title: string
+  content: string
+}
+
 export type UserMessage = MessageBranch & {
   id: string
   role: 'user'
   content: string
   files: FileAttachment[]
+  /** 提问中链接的网页读取结果，历史请求沿用；字段缺省的旧消息表示未读取过链接。 */
+  webFetches?: WebFetchPage[]
   createdAt: number
 }
 

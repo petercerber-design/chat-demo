@@ -40,15 +40,22 @@ export const ZHIPU_SEARCH_ENGINES = [
 /** search_std 基础版、search_pro 高阶版、search_pro_sogou 搜狗、search_pro_quark 夸克 */
 export type ZhipuSearchEngine = (typeof ZHIPU_SEARCH_ENGINES)[number]
 
+/** 搜索结果条数，智谱支持的可选枚举值 */
+export const ZHIPU_SEARCH_COUNTS = [10, 20, 30, 40, 50] as const
+
+export type ZhipuSearchCount = (typeof ZHIPU_SEARCH_COUNTS)[number]
+
 export type ZhipuWebSearchTool = {
   type: 'web_search'
   web_search: {
     enable: true
     /** 要调用的搜索引擎编码，接口要求必填 */
     search_engine: ZhipuSearchEngine
-    search_result: true,
-    search_intent:true,
-    count:30
+    search_result: true
+    /** 执行搜索意图识别 */
+    search_intent: true
+    /** 返回结果的条数 */
+    count: ZhipuSearchCount
   }
 }
 
@@ -57,7 +64,7 @@ export type ZhipuChatRequest = {
   messages: ZhipuMessage[]
   /** 与 OpenAI 一致，固定开启流式 */
   stream: true
-  /** GLM-5.3 / GLM-5.3-FlashX 不支持关闭思考 */
+  /** GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX 不支持关闭思考 */
   thinking: { type: 'enabled' }
   reasoning_effort: ReasoningEffort
   temperature: number
@@ -158,6 +165,56 @@ export const parseZhipuFile = async (
   return {
     taskId: typeof body.task_id === 'string' && body.task_id ? body.task_id : null,
     text: content,
+  }
+}
+
+/** 网页读取（web_fetch）返回的正文；内容过长时截断，避免占满上下文 */
+export type ZhipuReaderPage = {
+  url: string
+  title: string
+  content: string
+}
+
+/** 单页正文最多保留的字符数 */
+const MAX_READER_CONTENT = 12_000
+
+/**
+ * POST /reader（网页阅读）：抓取并解析链接正文，返回 Markdown 文本。
+ * 智谱 OpenAI 兼容的对话工具里没有内置 web_fetch，网页读取使用这个独立接口实现。
+ */
+export const readZhipuUrl = async (
+  apiKey: string,
+  url: string,
+  signal?: AbortSignal
+): Promise<ZhipuReaderPage> => {
+  const response = await request(`${ZHIPU_API_ORIGIN}/reader`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      return_format: 'markdown',
+      retain_images: false,
+      with_images_summary: false,
+      with_links_summary: false,
+    }),
+    signal,
+  })
+  const raw = await response.text()
+  let body: unknown
+  try {
+    body = JSON.parse(raw)
+  } catch {
+    throw new ApiError('protocol', raw)
+  }
+  const result = isRecord(body) && isRecord(body.reader_result) ? body.reader_result : undefined
+  const content = result && typeof result.content === 'string' ? result.content.trim() : ''
+  if (!content) {
+    throw new ApiError('protocol', raw)
+  }
+  return {
+    url: result && typeof result.url === 'string' && result.url ? result.url : url,
+    title: result && typeof result.title === 'string' && result.title ? result.title : url,
+    content: content.slice(0, MAX_READER_CONTENT),
   }
 }
 

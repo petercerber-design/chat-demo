@@ -27,11 +27,18 @@ import {
   setSessionCacheLimit,
   setSystemPrompt,
   setTemperature,
+  setZhipuSearchCount,
   setZhipuSearchEngine,
+  setZhipuWebFetch,
   useModelConfig,
   type SafetyCheckLevel,
 } from '../../services/chat/config.js'
-import type { ReasoningEffort, ZhipuSearchEngine } from '../../services/api/zhipu.js'
+import {
+  ZHIPU_SEARCH_COUNTS,
+  type ReasoningEffort,
+  type ZhipuSearchCount,
+  type ZhipuSearchEngine,
+} from '../../services/api/zhipu.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -141,6 +148,8 @@ const SettingsContent = () => {
               <SettingGroup title={t('settingsModelGroupZhipu')} />
               <TemperatureSetting />
               <ZhipuSearchEngineSetting />
+              <ZhipuSearchCountSetting />
+              <ZhipuWebFetchSetting />
 
               <SettingGroup title={t('settingsModelGroupReset')} />
               <ResetModelSetting />
@@ -472,6 +481,57 @@ const ZhipuSearchEngineSetting = () => {
             { value: 'search_pro_quark', label: t('settingsModelZhipuSearchQuark') },
           ]}
           onChange={setZhipuSearchEngine}
+        />
+      }
+    />
+  )
+}
+
+/** 下拉框的 value 为字符串，提交时再转成数字 */
+type SearchCountValue = `${ZhipuSearchCount}`
+
+/** 智谱智能搜索返回的结果条数，接口支持 10 / 20 / 30 / 40 / 50 */
+const ZhipuSearchCountSetting = () => {
+  const t = useTranslate()
+  const zhipuSearchCount = useModelConfig((state) => state.zhipuSearchCount)
+  return (
+    <SettingCell
+      label={t('settingsModelZhipuSearchCount')}
+      description={t('settingsModelZhipuSearchCountDescription')}
+      status={null}
+      action={
+        <Select<SearchCountValue>
+          ariaLabel={t('settingsModelZhipuSearchCount')}
+          value={String(zhipuSearchCount) as SearchCountValue}
+          options={ZHIPU_SEARCH_COUNTS.map((count) => ({
+            value: String(count) as SearchCountValue,
+            label: String(count),
+          }))}
+          onChange={(value) => setZhipuSearchCount(Number(value) as ZhipuSearchCount)}
+        />
+      }
+    />
+  )
+}
+
+/** 提问中有链接时是否调用智谱网页阅读接口读取正文 */
+const ZhipuWebFetchSetting = () => {
+  const t = useTranslate()
+  const zhipuWebFetch = useModelConfig((state) => state.zhipuWebFetch)
+  return (
+    <SettingCell
+      label={t('settingsModelZhipuWebFetch')}
+      description={t('settingsModelZhipuWebFetchDescription')}
+      status={null}
+      action={
+        <Select<'on' | 'off'>
+          ariaLabel={t('settingsModelZhipuWebFetch')}
+          value={zhipuWebFetch ? 'on' : 'off'}
+          options={[
+            { value: 'on', label: t('settingsModelZhipuWebFetchOn') },
+            { value: 'off', label: t('settingsModelZhipuWebFetchOff') },
+          ]}
+          onChange={(value) => setZhipuWebFetch(value === 'on')}
         />
       }
     />

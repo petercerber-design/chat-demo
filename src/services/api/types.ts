@@ -5,9 +5,9 @@
  */
 
 /**
- * 智谱已接入的模型；GLM-5.3 与 GLM-5.3-FlashX 均只支持文本输入，且强制开启深度思考。
+ * 智谱已接入的模型；GLM-5.3、GLM-5.3-Flash 与 GLM-5.3-FlashX 均只支持文本输入，且强制开启深度思考。
  */
-export const ZHIPU_MODELS = ['glm-5.3', 'glm-5.3-flashx'] as const
+export const ZHIPU_MODELS = ['glm-5.3', 'glm-5.3-flash', 'glm-5.3-flashx'] as const
 
 export type ZhipuModel = (typeof ZHIPU_MODELS)[number]
 

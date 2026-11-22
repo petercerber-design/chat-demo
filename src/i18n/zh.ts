@@ -97,7 +97,7 @@ export const zh = {
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    '智谱 GLM-5.3 / GLM-5.3-FlashX 的采样温度（0–1，默认 0.2），值越低越稳定，越高越发散；仅影响智谱模型。',
+    '智谱 GLM-5.3 / GLM-5.3-Flash / GLM-5.3-FlashX 的采样温度（0–1，默认 0.2），值越低越稳定，越高越发散；仅影响智谱模型。',
   settingsModelReasoningEffort: '推理程度',
   settingsModelReasoningEffortDescription:
     '思考强度：max 为深度推理，high 为增强推理；DeepSeek 通过 output_config、智谱通过 reasoning_effort 生效。',
@@ -110,6 +110,14 @@ export const zh = {
   settingsModelZhipuSearchPro: 'search_pro（高阶版）',
   settingsModelZhipuSearchSogou: 'search_pro_sogou（搜狗）',
   settingsModelZhipuSearchQuark: 'search_pro_quark（夸克）',
+  settingsModelZhipuSearchCount: '搜索结果条数',
+  settingsModelZhipuSearchCountDescription:
+    '智能搜索单次返回的网页条数，可选 10、20、30、40、50，默认 30。',
+  settingsModelZhipuWebFetch: '网页读取（web_fetch）',
+  settingsModelZhipuWebFetchDescription:
+    '提问中包含链接时，调用智谱网页阅读接口抓取正文并加入上下文；单条提问最多读取 3 个链接。',
+  settingsModelZhipuWebFetchOn: '开启',
+  settingsModelZhipuWebFetchOff: '关闭',
   settingsModelGroupCommon: '通用设置',
   settingsModelGroupDeepseek: 'DeepSeek 专属',
   settingsModelGroupZhipu: '智谱专属',
