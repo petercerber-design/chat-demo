@@ -41,6 +41,8 @@ export const en = {
   messageVersions: 'Message versions',
   previousVersion: 'Previous version',
   nextVersion: 'Next version',
+  messageNav: 'Message navigation',
+  messageNavScrollHint: 'Scroll for more',
   searchResult: 'Search results',
   mermaidDiagram: 'Diagram',
   mermaidCode: 'Code',

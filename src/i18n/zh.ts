@@ -37,6 +37,8 @@ export const zh = {
   messageVersions: '消息版本',
   previousVersion: '上一个版本',
   nextVersion: '下一个版本',
+  messageNav: '消息导航',
+  messageNavScrollHint: '滚动查看更多',
   searchResult: '搜索结果',
   mermaidDiagram: '图表',
   mermaidCode: '代码',
@@ -93,7 +95,8 @@ export const zh = {
   settingsModelMaxTokens: '最大输出 Token',
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
   settingsModelSystemPrompt: '系统提示词',
-  settingsModelSystemPromptDescription: '所有生成请求统一携带的助手身份说明；留空时使用内置默认提示词。',
+  settingsModelSystemPromptDescription:
+    '所有生成请求统一携带的助手身份说明；留空时使用内置默认提示词。',
   settingsModelSessionCacheLimit: '会话缓存上限',
   settingsModelSessionCacheLimitDescription:
     '本机内存保留的最近会话详情数量（1–50）；当前会话与生成中的会话不会被淘汰。',
