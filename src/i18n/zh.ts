@@ -97,12 +97,23 @@ export const zh = {
   settingsModelMaxTokensDescription: '单次请求允许生成的最大 Token 数（1–1000000）。',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    '智谱 GLM-5.3 的采样温度（0–1），值越低越稳定，越高越发散；仅影响智谱模型，DeepSeek 请求不变。',
+    '智谱 GLM-5.3 的采样温度（0–1），值越低越稳定，越高越发散；仅影响智谱模型。',
   settingsModelReasoningEffort: '推理程度',
   settingsModelReasoningEffortDescription:
-    '智谱 GLM-5.3 的思考强度，max 为深度推理，high 为增强推理；仅影响智谱模型。',
+    '思考强度：max 为深度推理，high 为增强推理；DeepSeek 通过 output_config、智谱通过 reasoning_effort 生效。',
   settingsModelReasoningEffortMax: 'max（深度推理）',
   settingsModelReasoningEffortHigh: 'high（增强推理）',
+  settingsModelZhipuSearchEngine: '搜索引擎',
+  settingsModelZhipuSearchEngineDescription:
+    '开启智能搜索时调用的智谱搜索引擎，接口要求必填；search_std 基础版、search_pro 高阶版、搜狗、夸克。',
+  settingsModelZhipuSearchStd: 'search_std（基础版）',
+  settingsModelZhipuSearchPro: 'search_pro（高阶版）',
+  settingsModelZhipuSearchSogou: 'search_pro_sogou（搜狗）',
+  settingsModelZhipuSearchQuark: 'search_pro_quark（夸克）',
+  settingsModelGroupCommon: '通用设置',
+  settingsModelGroupDeepseek: 'DeepSeek 专属',
+  settingsModelGroupZhipu: '智谱专属',
+  settingsModelGroupReset: '恢复默认',
   settingsModelSystemPrompt: '系统提示词',
   settingsModelSystemPromptDescription:
     '所有生成请求统一携带的助手身份说明；留空时使用内置默认提示词。',

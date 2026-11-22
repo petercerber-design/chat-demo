@@ -27,10 +27,11 @@ import {
   setSessionCacheLimit,
   setSystemPrompt,
   setTemperature,
+  setZhipuSearchEngine,
   useModelConfig,
   type SafetyCheckLevel,
 } from '../../services/chat/config.js'
-import type { ReasoningEffort } from '../../services/api/zhipu.js'
+import type { ReasoningEffort, ZhipuSearchEngine } from '../../services/api/zhipu.js'
 import { useIsMobile } from '../../app/viewport.js'
 import { useChatStore } from '../../services/chat/store.js'
 import { regionCodes, getRegionName, provinces } from '../../services/location.js'
@@ -126,14 +127,22 @@ const SettingsContent = () => {
             </>
           ) : section === 'model' ? (
             <>
+              <SettingGroup title={t('settingsModelGroupCommon')} />
               <MaxTokensSetting />
-              <TemperatureSetting />
               <ReasoningEffortSetting />
               <SystemPromptSetting />
               <SessionCacheLimitSetting />
+
+              <SettingGroup title={t('settingsModelGroupDeepseek')} />
               <SafetyCheckSetting />
               <FileRetryLimitSetting />
               <FileRetryBaseDelaySetting />
+
+              <SettingGroup title={t('settingsModelGroupZhipu')} />
+              <TemperatureSetting />
+              <ZhipuSearchEngineSetting />
+
+              <SettingGroup title={t('settingsModelGroupReset')} />
               <ResetModelSetting />
             </>
           ) : (
@@ -443,7 +452,33 @@ const TemperatureSetting = () => {
   )
 }
 
-/** 智谱 GLM-5.3 的推理程度：max 深度推理 / high 增强推理 */
+/** 智谱智能搜索调用的搜索引擎编码，接口要求必填 */
+const ZhipuSearchEngineSetting = () => {
+  const t = useTranslate()
+  const zhipuSearchEngine = useModelConfig((state) => state.zhipuSearchEngine)
+  return (
+    <SettingCell
+      label={t('settingsModelZhipuSearchEngine')}
+      description={t('settingsModelZhipuSearchEngineDescription')}
+      status={null}
+      action={
+        <Select<ZhipuSearchEngine>
+          ariaLabel={t('settingsModelZhipuSearchEngine')}
+          value={zhipuSearchEngine}
+          options={[
+            { value: 'search_std', label: t('settingsModelZhipuSearchStd') },
+            { value: 'search_pro', label: t('settingsModelZhipuSearchPro') },
+            { value: 'search_pro_sogou', label: t('settingsModelZhipuSearchSogou') },
+            { value: 'search_pro_quark', label: t('settingsModelZhipuSearchQuark') },
+          ]}
+          onChange={setZhipuSearchEngine}
+        />
+      }
+    />
+  )
+}
+
+/** 推理程度：DeepSeek 的 output_config.effort 与智谱的 reasoning_effort 共用 */
 const ReasoningEffortSetting = () => {
   const t = useTranslate()
   const reasoningEffort = useModelConfig((state) => state.reasoningEffort)
@@ -669,6 +704,13 @@ const errorStatus = (key: TranslationKey, error: unknown): Status => ({
     : { params: { message: error instanceof Error ? error.message : String(error) } }),
   error: true,
 })
+
+/** 分组标题：模型设置里按通用、DeepSeek 专属与智谱专属分组 */
+const SettingGroup = ({ title }: { title: string }) => (
+  <div className={styles.groupTitle} role="presentation">
+    {title}
+  </div>
+)
 
 const SettingCell = ({
   label,

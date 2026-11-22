@@ -4,6 +4,7 @@ import {
   type ReasoningEffort,
   type ZhipuChatRequest,
   type ZhipuMessage,
+  type ZhipuSearchEngine,
 } from '../api/zhipu.js'
 import { getContextRounds, getReplyText } from './reply.js'
 import type { AssistantMessage, FileAttachment, Message, UserMessage } from './types.js'
@@ -73,6 +74,7 @@ export const createZhipuRequest = ({
   reasoningEffort,
   maxTokens,
   search,
+  searchEngine,
 }: {
   system: string
   messages: ZhipuMessage[]
@@ -80,6 +82,7 @@ export const createZhipuRequest = ({
   reasoningEffort: ReasoningEffort
   maxTokens: number
   search: boolean
+  searchEngine: ZhipuSearchEngine
 }): ZhipuChatRequest => ({
   model: ZHIPU_MODEL,
   messages: system.trim() ? [{ role: 'system', content: system }, ...messages] : messages,
@@ -89,7 +92,12 @@ export const createZhipuRequest = ({
   temperature,
   max_tokens: Math.min(maxTokens, ZHIPU_MAX_OUTPUT_TOKENS),
   tools: search
-    ? [{ type: 'web_search', web_search: { enable: true, search_result: true } }]
+    ? [
+        {
+          type: 'web_search',
+          web_search: { enable: true, search_engine: searchEngine, search_result: true },
+        },
+      ]
     : undefined,
   stream_options: { chunk_include_usage: true },
 })

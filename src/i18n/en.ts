@@ -102,12 +102,23 @@ export const en = {
   settingsModelMaxTokensDescription: 'Maximum number of tokens generated per request (1–1000000).',
   settingsModelTemperature: 'Temperature',
   settingsModelTemperatureDescription:
-    'Sampling temperature for Zhipu GLM-5.3 (0–1). Lower is more stable, higher is more varied. Zhipu models only; DeepSeek requests are unchanged.',
+    'Sampling temperature for Zhipu GLM-5.3 (0–1). Lower is more stable, higher is more varied. Zhipu models only.',
   settingsModelReasoningEffort: 'Reasoning effort',
   settingsModelReasoningEffortDescription:
-    'Thinking effort for Zhipu GLM-5.3: max for deep reasoning, high for enhanced reasoning. Zhipu models only.',
+    'Thinking effort: max for deep reasoning, high for enhanced reasoning. Applies to DeepSeek output_config and Zhipu reasoning_effort.',
   settingsModelReasoningEffortMax: 'max (deep reasoning)',
   settingsModelReasoningEffortHigh: 'high (enhanced reasoning)',
+  settingsModelZhipuSearchEngine: 'Search engine',
+  settingsModelZhipuSearchEngineDescription:
+    'Zhipu search engine used when smart search is enabled (required by the API): search_std, search_pro, Sogou, or Quark.',
+  settingsModelZhipuSearchStd: 'search_std (standard)',
+  settingsModelZhipuSearchPro: 'search_pro (advanced)',
+  settingsModelZhipuSearchSogou: 'search_pro_sogou (Sogou)',
+  settingsModelZhipuSearchQuark: 'search_pro_quark (Quark)',
+  settingsModelGroupCommon: 'Common',
+  settingsModelGroupDeepseek: 'DeepSeek only',
+  settingsModelGroupZhipu: 'Zhipu only',
+  settingsModelGroupReset: 'Reset',
   settingsModelSystemPrompt: 'System prompt',
   settingsModelSystemPromptDescription:
     'Assistant identity sent with every request. Leave empty to use the built-in default prompt.',

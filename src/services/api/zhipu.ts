@@ -25,9 +25,25 @@ export type ZhipuMessage =
   | { role: 'user'; content: string }
   | { role: 'assistant'; content: string }
 
+/** 智谱内置搜索支持的搜索引擎编码 */
+export const ZHIPU_SEARCH_ENGINES = [
+  'search_std',
+  'search_pro',
+  'search_pro_sogou',
+  'search_pro_quark',
+] as const
+
+/** search_std 基础版、search_pro 高阶版、search_pro_sogou 搜狗、search_pro_quark 夸克 */
+export type ZhipuSearchEngine = (typeof ZHIPU_SEARCH_ENGINES)[number]
+
 export type ZhipuWebSearchTool = {
   type: 'web_search'
-  web_search: { enable: true; search_result: true ,search_engine:"search_std"}
+  web_search: {
+    enable: true
+    /** 要调用的搜索引擎编码，接口要求必填 */
+    search_engine: ZhipuSearchEngine
+    search_result: true
+  }
 }
 
 export type ZhipuChatRequest = {

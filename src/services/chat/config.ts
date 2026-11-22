@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { ChatModel } from '../api/types.js'
-import type { ReasoningEffort } from '../api/zhipu.js'
+import {
+  ZHIPU_SEARCH_ENGINES,
+  type ReasoningEffort,
+  type ZhipuSearchEngine,
+} from '../api/zhipu.js'
 import { isChatModel } from './models.js'
 
 /** 安全审核等级：high 时请求进入扩展模式 */
@@ -12,8 +16,10 @@ export type ModelConfig = {
   maxTokens: number
   /** 智谱 GLM-5.3 的采样温度（0–1）；DeepSeek 请求不使用 */
   temperature: number
-  /** 智谱 GLM-5.3 的推理程度；DeepSeek 请求保持原有固定值 */
+  /** 推理程度：DeepSeek 的 output_config.effort 与智谱的 reasoning_effort 共用 */
   reasoningEffort: ReasoningEffort
+  /** 智谱智能搜索使用的搜索引擎编码 */
+  zhipuSearchEngine: ZhipuSearchEngine
   systemPrompt: string
   sessionCacheLimit: number
   safetyCheckLevel: SafetyCheckLevel
@@ -26,6 +32,7 @@ const KEYS = {
   maxTokens: 'chat-demo:max-tokens',
   temperature: 'chat-demo:temperature',
   reasoningEffort: 'chat-demo:reasoning-effort',
+  zhipuSearchEngine: 'chat-demo:zhipu-search-engine',
   systemPrompt: 'chat-demo:system-prompt',
   sessionCacheLimit: 'chat-demo:session-cache-limit',
   safetyCheckLevel: 'chat-demo:safety-check-level',
@@ -83,6 +90,7 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   maxTokens: 65536,
   temperature: 1,
   reasoningEffort: 'max',
+  zhipuSearchEngine: 'search_std',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   sessionCacheLimit: 5,
   safetyCheckLevel: 'low',
@@ -145,6 +153,13 @@ const initialTemperature = (): number => {
 const initialReasoningEffort = (): ReasoningEffort =>
   read(KEYS.reasoningEffort) === 'high' ? 'high' : 'max'
 
+const initialZhipuSearchEngine = (): ZhipuSearchEngine => {
+  const saved = read(KEYS.zhipuSearchEngine)
+  return ZHIPU_SEARCH_ENGINES.includes(saved as ZhipuSearchEngine)
+    ? (saved as ZhipuSearchEngine)
+    : DEFAULT_MODEL_CONFIG.zhipuSearchEngine
+}
+
 const initialSafetyCheckLevel = (): SafetyCheckLevel =>
   read(KEYS.safetyCheckLevel) === 'high' ? 'high' : 'low'
 
@@ -163,6 +178,7 @@ export const useModelConfig = create<ModelConfig>(() => ({
   systemPrompt: initialSystemPrompt(),
   temperature: initialTemperature(),
   reasoningEffort: initialReasoningEffort(),
+  zhipuSearchEngine: initialZhipuSearchEngine(),
   sessionCacheLimit: initialNumber(
     KEYS.sessionCacheLimit,
     DEFAULT_MODEL_CONFIG.sessionCacheLimit,
@@ -218,6 +234,11 @@ export const setTemperature = (temperature: number) => {
 export const setReasoningEffort = (reasoningEffort: ReasoningEffort) => {
   write(KEYS.reasoningEffort, reasoningEffort)
   useModelConfig.setState({ reasoningEffort })
+}
+
+export const setZhipuSearchEngine = (zhipuSearchEngine: ZhipuSearchEngine) => {
+  write(KEYS.zhipuSearchEngine, zhipuSearchEngine)
+  useModelConfig.setState({ zhipuSearchEngine })
 }
 
 export const setSessionCacheLimit = (sessionCacheLimit: number) => {

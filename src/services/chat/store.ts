@@ -1170,6 +1170,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           safetyCheckLevel,
           temperature,
           reasoningEffort,
+          zhipuSearchEngine,
         } = getModelConfig()
         const curModel = initial.model ?? model
         const apiKey = getProviderApiKey(useSettings.getState(), provider) ?? ''
@@ -1189,6 +1190,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   reasoningEffort,
                   maxTokens,
                   search: initial.search ?? false,
+                  searchEngine: zhipuSearchEngine,
                 }),
                 controller.signal
               )
@@ -1209,7 +1211,7 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
                   ),
                   thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
                   safety_check: { level: safetyCheckLevel },
-                  output_config: { effort: 'max' },
+                  output_config: { effort: reasoningEffort },
                   tools: curModel == 'deepseek-flash' ? serverTools(initial.search ?? false) : [], //  todo pro模型不支持搜索，及生成title
                   // ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
                 },

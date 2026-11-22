@@ -184,7 +184,7 @@ export type CreateMessageRequest = {
   safety_check: { level: 'low' | 'high' }
   title?: { enabled: boolean }
   max_token?: number,
-  /** 扩展模式下的推理程度：DeepSeek 由客户端固定为 max，预留 low / high */
+  /** 扩展模式下的推理程度，由模型设置中的「推理程度」配置 */
   output_config?: { effort: 'max' | 'high' | 'low' }
 }
 
