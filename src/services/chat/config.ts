@@ -68,7 +68,8 @@ Answer style:
 Quality check before finalizing:
 Verify that all assumptions are stated, notation is consistent, edge cases are considered, necessary and sufficient conditions are not confused, and any proof or computation supports the stated conclusion. When appropriate, end with a short “Key points” or “Common pitfalls” summary.
 
-Respond in the same language as the asked question unless they request otherwise. Use LaTeX for mathematics.`
+Respond in the user’s language unless they request otherwise. Use LaTeX for mathematics.`
+
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   model: 'deepseek-v4-pro',
   maxTokens: 65536,
